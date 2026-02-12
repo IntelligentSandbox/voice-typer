@@ -17,8 +17,11 @@ find_package(Qt6 REQUIRED COMPONENTS
 set(SOURCES main.cpp)
 
 qt_standard_project_setup()
-
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    $<$<CONFIG:Debug>:DEBUG>
+)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
