@@ -9,4 +9,3 @@ cd build
 cmake .. -G "Visual Studio 17 2022" -A x64
 cmake --build . --config %BUILD_TYPE%
 cd ..
-.\build\%BUILD_TYPE%\VoiceTyper.exe

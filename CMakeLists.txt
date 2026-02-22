@@ -14,7 +14,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Multimedia
 )
 
-set(SOURCES main.cpp)
+set(SOURCES src/main.cpp)
 
 qt_standard_project_setup()
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
