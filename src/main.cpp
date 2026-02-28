@@ -24,15 +24,11 @@ int main(int argc, char *argv[])
     // query_cpu_info(&AppState.CpuInfo);
 
 #ifdef DEBUG
-    qDebug() << "Available Audio Input Devices:" << AppState.AudioInputDevices.count();
-    qDebug() << "Default Audio Input device:" << QMediaDevices::defaultAudioInput().description();
-    for (const QAudioDevice &device : AppState.AudioInputDevices)
-    {
-        qDebug() << "Audio Input Devices:" << device.description();
-    }
-    // qDebug() << "OS:" << AppState.SystemInfo.ProductName;
-    // qDebug() << "CPU arch:" << AppState.CpuInfo.Architecture;
-    // qDebug() << "CPU cores:" << AppState.CpuInfo.LogicalCores;
+	qDebug() << "Available Audio Input Devices:" << AppState.AudioInputDevices.size();
+	for (const AudioInputDeviceInfo &device : AppState.AudioInputDevices)
+	{
+		qDebug() << "Audio Input Device:" << device.Name.c_str();
+	}
 #endif
 
     start_hotkey_listener(&AppState);

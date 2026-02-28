@@ -6,40 +6,37 @@
 
 void init_main_window(GlobalState *AppState)
 {
-    // NOTE(warren): If need multiple screens of buttons/settings, although ideally just put everything on the first screen, 
-    // use multiple layouts I think and a tab/option bar at the top to switch between them.
-    QWidget *MainWindow = AppState->QtMainWindow;
-    QList<QAudioDevice> *AudioInputDevices = &(AppState->AudioInputDevices);
+	QWidget *MainWindow = AppState->QtMainWindow;
+	std::vector<AudioInputDeviceInfo> *AudioInputDevices = &(AppState->AudioInputDevices);
 
-    // ---- Left Column ----
-    QGridLayout *GridLayout = new QGridLayout(MainWindow);
-    
-    // Record Button
-    QPushButton *RecordButton = new QPushButton(MainWindow);
-    RecordButton->setStyleSheet(AppState->BUTTON_STYLE_GREEN);
-    RecordButton->setText("Record (Alt+F1)");
-    RecordButton->setMinimumHeight(60);
-    GridLayout->addWidget(RecordButton, 0, 0);
-    
-    AppState->RecordButton = RecordButton;
-    
-    QLabel *AudioSelectLabel = new QLabel("Audio Input", MainWindow);
-    GridLayout->addWidget(AudioSelectLabel, 1, 0);
+	// ---- Left Column ----
+	QGridLayout *GridLayout = new QGridLayout(MainWindow);
+	
+	// Record Button
+	QPushButton *RecordButton = new QPushButton(MainWindow);
+	RecordButton->setStyleSheet(AppState->BUTTON_STYLE_GREEN);
+	RecordButton->setText("Record (Alt+F1)");
+	RecordButton->setMinimumHeight(60);
+	GridLayout->addWidget(RecordButton, 0, 0);
+	
+	AppState->RecordButton = RecordButton;
+	
+	QLabel *AudioSelectLabel = new QLabel("Audio Input", MainWindow);
+	GridLayout->addWidget(AudioSelectLabel, 1, 0);
 
-    QComboBox *AudioInputSelect = new QComboBox(MainWindow);
-    QString CurrentAudioDeviceDescription;
-    for (int i = 0; i < AudioInputDevices->size(); i++)
-    {
-        QAudioDevice Device = AudioInputDevices->at(i);
-        QString Description = Device.description();
-        AudioInputSelect->addItem(Description);
-        if (AppState->CurrentAudioDeviceIndex == i)
-        {
-            AudioInputSelect->setCurrentIndex(i);
-        }
-    }
-    AudioInputSelect->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-    GridLayout->addWidget(AudioInputSelect, 2, 0);
+	QComboBox *AudioInputSelect = new QComboBox(MainWindow);
+	for (size_t i = 0; i < AudioInputDevices->size(); i++)
+	{
+		AudioInputDeviceInfo Device = AudioInputDevices->at(i);
+		QString Description = QString::fromUtf8(Device.Name.c_str());
+		AudioInputSelect->addItem(Description);
+		if (AppState->CurrentAudioDeviceIndex == (int)i)
+		{
+			AudioInputSelect->setCurrentIndex((int)i);
+		}
+	}
+	AudioInputSelect->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+	GridLayout->addWidget(AudioInputSelect, 2, 0);
 
     QLabel *ModelSelectLabel = new QLabel("STT Model", MainWindow);
     GridLayout->addWidget(ModelSelectLabel, 3, 0);
@@ -99,7 +96,7 @@ void init_ui(GlobalState *AppState)
     AppState->QtApp->setFont(Font);
 
     AppState->QtMainWindow->setWindowTitle("Voice Typer");
-    AppState->QtMainWindow->resize(AppState->WINDOW_DEFAULT_WIDTH, AppState->WINDOW_DEFAULT_HEIGHT);
+    AppState->QtMainWindow->resize(WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT);
 
     init_main_window(AppState);
 }

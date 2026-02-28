@@ -1,16 +1,17 @@
 #pragma once
 
+#include "state.h"
+
 void update_audio_input_selection(GlobalState *AppState, int index)
 {
-    AppState->CurrentAudioDeviceIndex = index;
+	AppState->CurrentAudioDeviceIndex = index;
 #ifdef DEBUG
-    qDebug() << "Selected audio input device index: " << index;
-    if (index < AppState->AudioInputDevices.size())
-    {
-        QAudioDevice Device = AppState->AudioInputDevices.at(index);
-        QString Description = Device.description();
-        qDebug() << "Selected audio input device description: " << Description;
-    }
+	qDebug() << "Selected audio input device index:" << index;
+	if (index >= 0 && index < (int)AppState->AudioInputDevices.size())
+	{
+		AudioInputDeviceInfo Device = AppState->AudioInputDevices.at(index);
+		qDebug() << "Selected audio input device:" << Device.Name.c_str();
+	}
 #endif
 }
 
