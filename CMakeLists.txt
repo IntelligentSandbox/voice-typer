@@ -29,7 +29,7 @@ add_subdirectory(src/external/whisper.cpp)
 set(SOURCES src/main.cpp)
 
 qt_standard_project_setup()
-qt_add_executable(${PROJECT_NAME} ${SOURCES})
+qt_add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/external/whisper.cpp/include
@@ -59,5 +59,13 @@ if(WIN32)
             $<$<CONFIG:Release>:--release>
             "$<TARGET_FILE:${PROJECT_NAME}>"
         COMMENT "Running windeployqt"
+    )
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND cmd /c robocopy
+            "${CMAKE_SOURCE_DIR}\\models"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>\\models"
+            /E /NJH /NJS /NFL /NDL
+            "||" exit 0
+        COMMENT "Copying models to output directory"
     )
 endif()

@@ -5,6 +5,12 @@
 
 int main(int argc, char *argv[])
 {
+	#ifdef DEBUG
+		if (!AttachConsole(ATTACH_PARENT_PROCESS)) AllocConsole();
+		freopen("CONOUT$", "w", stdout);
+		freopen("CONOUT$", "w", stderr);
+	#endif
+
 	QApplication QtApp(argc, argv);
 	QWidget QtMainWindow;
 
