@@ -2,20 +2,23 @@
 
 #include "qt.h"
 #include "platform_win32.h"
+#include "whisper_wrapper.h"
 
 #define WINDOW_DEFAULT_WIDTH 750
 #define WINDOW_DEFAULT_HEIGHT 300
 
+#define BUTTON_STYLE_GREEN "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: green;"
+#define BUTTON_STYLE_RED "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: #bF1121;"
+#define BUTTON_STYLE_GREY "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: #808080;"
+#define BUTTON_STYLE_BLUE "font-family: Georgia; font-size: 12pt; font-weight: bold; color: white; background-color: #2196F3;"
+
 struct GlobalState
 {
-	// Constants
-	const char *BUTTON_STYLE_GREEN = "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: green;";
-	const char *BUTTON_STYLE_RED = "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: #bF1121;";
-
 	// UI
 	QApplication *QtApp;
 	QWidget *QtMainWindow;
 	QPushButton *RecordButton;
+	QPushButton *LoadModelButton;
 
 	// Logic
 	bool IsRecording;
@@ -26,11 +29,12 @@ struct GlobalState
 
 	// Inference Device 
 	int CurrentInferenceDeviceIndex;
-	QList<QString> InferenceDevices;
+	std::vector<std::string> InferenceDevices;
 
 	// Whisper Wrapper
 	int CurrentSTTModelIndex;
-	QList<QString> STTModels;
+	std::vector<std::string> STTModels;
+	WhisperModelState WhisperState;
 
 	// SystemInfo SystemInfo;
 	// CPUInfo CpuInfo;

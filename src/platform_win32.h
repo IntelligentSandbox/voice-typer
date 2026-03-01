@@ -29,7 +29,9 @@ struct AudioCaptureDevice
 	bool IsCapturing;
 };
 
-inline std::vector<AudioInputDeviceInfo> query_audio_input_devices_native()
+inline
+std::vector<AudioInputDeviceInfo>
+query_audio_input_devices_native()
 {
 	std::vector<AudioInputDeviceInfo> Devices;
 
@@ -140,14 +142,24 @@ inline std::vector<AudioInputDeviceInfo> query_audio_input_devices_native()
 	return Devices;
 }
 
-inline const char* audio_device_get_name(AudioInputDeviceInfo* Info)
+inline
+const char*
+audio_device_get_name(AudioInputDeviceInfo *Info)
 {
-	if (Info) return Info->Name.c_str();
+	if (Info)
+	{
+		return Info->Name.c_str();
+	}
 	return "";
 }
 
-inline int audio_device_get_index(AudioInputDeviceInfo* Info)
+inline
+int
+audio_device_get_index(AudioInputDeviceInfo *Info)
 {
-	if (Info) return Info->Index;
+	if (Info)
+	{
+		return Info->Index;
+	}
 	return -1;
 }
