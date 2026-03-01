@@ -1,6 +1,7 @@
 #pragma once
 
 #include "state.h"
+#include "audio_pipeline.h"
 
 inline
 void
@@ -32,33 +33,125 @@ void
 update_stt_model_selection(GlobalState *AppState, int Index)
 {
 	AppState->CurrentSTTModelIndex = Index;
+
 	#ifdef DEBUG
-		printf("Selected STT model index: %d\n", Index);
+		printf("[control] Selected STT model index: %d\n", Index);
 	#endif
+
+	if (!is_whisper_model_loaded(&AppState->WhisperState)) return;
+	if (AppState->WhisperState.LoadedModelIndex == Index) return;
+
+	#ifdef DEBUG
+		printf("[control] Model index changed while loaded (%d -> %d), reloading\n",
+			AppState->WhisperState.LoadedModelIndex, Index);
+	#endif
+
+	AppState->LoadModelButton->setEnabled(false);
+	AppState->LoadModelButton->setText("Loading...");
+	AppState->LoadModelButton->repaint();
+	QApplication::processEvents();
+
+	bool Success = load_whisper_model(&AppState->WhisperState, Index);
+	AppState->LoadModelButton->setEnabled(true);
+	if (Success)
+	{
+		AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_BLUE);
+		AppState->LoadModelButton->setText("Unload STT Model");
+		#ifdef DEBUG
+			printf("[control] Model reloaded successfully\n");
+		#endif
+	}
+	else
+	{
+		AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_RED);
+		AppState->LoadModelButton->setText("Failed to load Model.");
+		#ifdef DEBUG
+			printf("[control] ERROR: Failed to reload model\n");
+		#endif
+	}
 }
 
 inline
 void
 toggle_recording(GlobalState *AppState)
 {
+	if (!is_whisper_model_loaded(&AppState->WhisperState))
+	{
+		#ifdef DEBUG
+			printf("[control] toggle_recording: no model loaded, ignoring\n");
+		#endif
+		return;
+	}
+
 	AppState->IsRecording = !AppState->IsRecording;
-	
+
 	if (AppState->IsRecording)
 	{
+		bool Started = start_record_pipeline(AppState);
+		if (!Started)
+		{
+			AppState->IsRecording = false;
+			#ifdef DEBUG
+				printf("[control] toggle_recording: failed to start record pipeline\n");
+			#endif
+			return;
+		}
 		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_RED);
 		AppState->RecordButton->setText("Stop (Alt+F1)");
 	}
 	else
 	{
-		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREEN);
-		AppState->RecordButton->setText("Record (Alt+F1)");
+		// Non-blocking: signal capture to stop. The pipeline thread will
+		// finish transcription in the background and restore the button.
+		signal_record_stop(AppState);
+		AppState->RecordButton->setEnabled(false);
+		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREY);
+		AppState->RecordButton->setText("Transcribing...");
 	}
+
 	#ifdef DEBUG
 		qDebug() << "Recording toggled to:" << AppState->IsRecording;
 	#endif
+}
 
-	// TODO(warren): start/stop audio recording
-	// for speed, we want to be able to stream it to whisper if possible.
+inline
+void
+toggle_streaming(GlobalState *AppState)
+{
+	if (!is_whisper_model_loaded(&AppState->WhisperState))
+	{
+		#ifdef DEBUG
+			printf("[control] toggle_streaming: no model loaded, ignoring\n");
+		#endif
+		return;
+	}
+
+	AppState->IsStreaming = !AppState->IsStreaming;
+
+	if (AppState->IsStreaming)
+	{
+		bool Started = start_streaming_pipeline(AppState);
+		if (!Started)
+		{
+			AppState->IsStreaming = false;
+			#ifdef DEBUG
+				printf("[control] toggle_streaming: failed to start streaming pipeline\n");
+			#endif
+			return;
+		}
+		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_RED);
+		AppState->StreamButton->setText("Stop Streaming");
+	}
+	else
+	{
+		stop_streaming_pipeline(AppState);
+		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_GREEN);
+		AppState->StreamButton->setText("Start Streaming");
+	}
+
+	#ifdef DEBUG
+		qDebug() << "Streaming toggled to:" << AppState->IsStreaming;
+	#endif
 }
 
 inline
@@ -88,9 +181,6 @@ toggle_stt_model_load(GlobalState *AppState)
 		AppState->LoadModelButton->setEnabled(false);
 		AppState->LoadModelButton->setText("Loading...");
 		AppState->LoadModelButton->repaint();
-
-		// Process pending events to show the "Loading..." text
-		QApplication::processEvents();
 
 		bool Success = load_whisper_model(&AppState->WhisperState, AppState->CurrentSTTModelIndex);
 		AppState->LoadModelButton->setEnabled(true);

@@ -7,10 +7,12 @@ piping their audio input -> whisper.cpp model -> insert text to focused text inp
 
 ## Reminders
 use tab chars for indentation
-use crlf line endings
+use lf line endings
 follow the existing coding guidelines
 do not remove code comments unless explicitly directed to
 build the project using `build.bat debug`
 use early returns in logical flow where possible, helps to reduce code indentation
 try not to have long lines (more than 120 chars), unroll onto newlines if needed
 do not insert comments unless explicitly directed to
+single line if statements are allowed without curly brackets but must be on the same line and within 120 chars; otherwise, put in curly brackets on newlines.
+single statement for loops must be in curly brackets

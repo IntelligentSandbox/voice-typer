@@ -7,6 +7,10 @@
 	#include <cstdio>
 #endif
 
+#ifndef DEBUG
+static void whisper_log_suppress(ggml_log_level, const char *, void *) {}
+#endif
+
 enum WhisperModelIndex
 {
 	WHISPER_MODEL_TINY_EN = 0,
@@ -29,6 +33,7 @@ struct WhisperModelState
 {
 	whisper_context *Context;
 	bool IsLoaded;
+	int LoadedModelIndex;
 	std::string ModelPath;
 };
 
@@ -38,9 +43,12 @@ init_whisper_state(WhisperModelState *State)
 {
 	State->Context = nullptr;
 	State->IsLoaded = false;
+	State->LoadedModelIndex = -1;
 	State->ModelPath = "";
 	#ifdef DEBUG
 		printf("[whisper_wrapper] Whisper state initialized\n");
+	#else
+		whisper_log_set(whisper_log_suppress, nullptr);
 	#endif
 }
 
@@ -105,6 +113,7 @@ load_whisper_model(WhisperModelState *State, int ModelIndex)
 	}
 
 	State->IsLoaded = true;
+	State->LoadedModelIndex = ModelIndex;
 	State->ModelPath = ModelPath;
 
 	#ifdef DEBUG
@@ -134,6 +143,7 @@ unload_whisper_model(WhisperModelState *State)
 	whisper_free(State->Context);
 	State->Context = nullptr;
 	State->IsLoaded = false;
+	State->LoadedModelIndex = -1;
 	State->ModelPath = "";
 
 	#ifdef DEBUG

@@ -4,6 +4,11 @@
 #include "platform_win32.h"
 #include "whisper_wrapper.h"
 
+#include <atomic>
+#include <mutex>
+#include <vector>
+#include <thread>
+
 #define WINDOW_DEFAULT_WIDTH 750
 #define WINDOW_DEFAULT_HEIGHT 300
 
@@ -18,10 +23,12 @@ struct GlobalState
 	QApplication *QtApp;
 	QWidget *QtMainWindow;
 	QPushButton *RecordButton;
+	QPushButton *StreamButton;
 	QPushButton *LoadModelButton;
 
 	// Logic
 	bool IsRecording;
+	bool IsStreaming;
 
 	// Audio - platform-agnostic
 	int CurrentAudioDeviceIndex;
@@ -35,6 +42,15 @@ struct GlobalState
 	int CurrentSTTModelIndex;
 	std::vector<std::string> STTModels;
 	WhisperModelState WhisperState;
+
+	// Audio capture pipeline
+	std::atomic<bool> CaptureRunning;
+	std::thread CaptureThread;
+	std::mutex AudioBufferMutex;
+	std::vector<float> AudioAccumBuffer;
+
+	// Inference threading
+	int WhisperThreadCount;
 
 	// SystemInfo SystemInfo;
 	// CPUInfo CpuInfo;

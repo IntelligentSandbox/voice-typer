@@ -1,4 +1,5 @@
 #include "state.h"
+#include "control.h"
 
 #include <thread>
 #include <atomic>
@@ -23,7 +24,10 @@ hotkey_thread_func(GlobalState *AppState)
 
 			if (ToggleKeyIsDown && !ToggleKeyWasDown)
 			{
-				toggle_recording(AppState);
+				QMetaObject::invokeMethod(
+					AppState->QtApp,
+					[AppState]() { toggle_recording(AppState); },
+					Qt::QueuedConnection);
 			}
 
 			ToggleKeyWasDown = ToggleKeyIsDown;
@@ -81,6 +85,22 @@ query_inference_devices(GlobalState *AppState)
 
 	// TODO(warren): In the future, enable GPU support for dedicated cards like NVIDIA
 	AppState->InferenceDevices.push_back("GPU");
+}
+
+inline
+void
+query_whisper_thread_count(GlobalState *AppState)
+{
+	int LogicalCores = query_logical_processor_count();
+	int ThreadCount  = LogicalCores / 2;
+	if (ThreadCount < 1) ThreadCount = 1;
+
+	AppState->WhisperThreadCount = ThreadCount;
+
+	#ifdef DEBUG
+		printf("[system] Logical processors: %d, whisper thread count: %d\n",
+			LogicalCores, ThreadCount);
+	#endif
 }
 
 // TODO(warren): Assuming all the model files are present. 

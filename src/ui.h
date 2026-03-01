@@ -20,11 +20,20 @@ init_main_window(GlobalState *AppState)
 	RecordButton->setText("Record (Alt+F1)");
 	RecordButton->setMinimumHeight(60);
 	GridLayout->addWidget(RecordButton, 0, 0);
-	
+
 	AppState->RecordButton = RecordButton;
-	
+
+	// Stream Button
+	QPushButton *StreamButton = new QPushButton(MainWindow);
+	StreamButton->setStyleSheet(BUTTON_STYLE_GREEN);
+	StreamButton->setText("Start Streaming");
+	StreamButton->setMinimumHeight(60);
+	GridLayout->addWidget(StreamButton, 1, 0);
+
+	AppState->StreamButton = StreamButton;
+
 	QLabel *AudioSelectLabel = new QLabel("Audio Input", MainWindow);
-	GridLayout->addWidget(AudioSelectLabel, 1, 0);
+	GridLayout->addWidget(AudioSelectLabel, 2, 0);
 
 	QComboBox *AudioInputSelect = new QComboBox(MainWindow);
 	for (size_t i = 0; i < AudioInputDevices->size(); i++)
@@ -42,10 +51,10 @@ init_main_window(GlobalState *AppState)
 		#endif
 	}
 	AudioInputSelect->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-	GridLayout->addWidget(AudioInputSelect, 2, 0);
+	GridLayout->addWidget(AudioInputSelect, 3, 0);
 
 	QLabel *ModelSelectLabel = new QLabel("STT Model", MainWindow);
-	GridLayout->addWidget(ModelSelectLabel, 3, 0);
+	GridLayout->addWidget(ModelSelectLabel, 4, 0);
 	QComboBox *STTModelSelect = new QComboBox(MainWindow);
 	for (size_t i = 0; i < AppState->STTModels.size(); i++)
 	{
@@ -56,10 +65,10 @@ init_main_window(GlobalState *AppState)
 			STTModelSelect->setCurrentIndex(i);
 		}
 	}
-	GridLayout->addWidget(STTModelSelect, 4, 0);
+	GridLayout->addWidget(STTModelSelect, 5, 0);
 
 	QLabel *InferenceDeviceSelectLabel = new QLabel("Inference Device", MainWindow);
-	GridLayout->addWidget(InferenceDeviceSelectLabel, 5, 0);
+	GridLayout->addWidget(InferenceDeviceSelectLabel, 6, 0);
 	QComboBox *InferenceDeviceSelect = new QComboBox(MainWindow);
 	for (size_t i = 0; i < AppState->InferenceDevices.size(); i++)
 	{
@@ -71,17 +80,17 @@ init_main_window(GlobalState *AppState)
 		}
 	}
 
-	GridLayout->addWidget(InferenceDeviceSelect, 6, 0);
+	GridLayout->addWidget(InferenceDeviceSelect, 7, 0);
 
 	// ---- Right Column ----
-	QLabel *InferenceDeviceLabel = new QLabel("Transcription Stats: ", MainWindow);
-	GridLayout->addWidget(InferenceDeviceLabel, 0, 1);
+	// QLabel *InferenceDeviceLabel = new QLabel("Transcription Stats: ", MainWindow);
+	// GridLayout->addWidget(InferenceDeviceLabel, 0, 1);
 
 	QPushButton *LoadModelButton = new QPushButton(MainWindow);
 	LoadModelButton->setStyleSheet(BUTTON_STYLE_GREY);
 	LoadModelButton->setText("Load Selected STT Model");
 	LoadModelButton->setMinimumHeight(60);
-	GridLayout->addWidget(LoadModelButton, 1, 1);
+	GridLayout->addWidget(LoadModelButton, 0, 1);
 
 	AppState->LoadModelButton = LoadModelButton;
 
@@ -108,6 +117,11 @@ init_main_window(GlobalState *AppState)
 	QObject::connect(RecordButton, &QPushButton::clicked, [AppState]()
 	{
 		toggle_recording(AppState);
+	});
+
+	QObject::connect(StreamButton, &QPushButton::clicked, [AppState]()
+	{
+		toggle_streaming(AppState);
 	});
 
 	QObject::connect(LoadModelButton, &QPushButton::clicked, [AppState]()

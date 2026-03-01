@@ -1,6 +1,7 @@
 #include "state.h"
 #include "ui.h"
 #include "system.h"
+#include "audio_pipeline.h"
 
 int main(int argc, char *argv[])
 {
@@ -17,6 +18,8 @@ int main(int argc, char *argv[])
 	AppState.QtMainWindow = &QtMainWindow;
 
 	AppState.IsRecording = false;
+	AppState.IsStreaming = false;
+	AppState.CaptureRunning = false;
 
 	init_whisper_state(&AppState.WhisperState);
 
@@ -24,11 +27,10 @@ int main(int argc, char *argv[])
 		printf("[main] Whisper state initialized\n");
 	#endif
 
-	// query_system_info(&AppState.SystemInfo);
 	query_audio_input_devices(&AppState);
 	query_inference_devices(&AppState);
 	query_available_stt_models(&AppState);
-	// query_cpu_info(&AppState.CpuInfo);
+	query_whisper_thread_count(&AppState);
 
 	#ifdef DEBUG
 		qDebug() << "Available Audio Input Devices:" << AppState.AudioInputDevices.size();
@@ -46,6 +48,12 @@ int main(int argc, char *argv[])
 	int exitCode = QtApp.exec();
 
 	stop_hotkey_listener();
+
+	if (AppState.IsRecording)
+		signal_record_stop(&AppState);
+
+	if (AppState.IsStreaming)
+		stop_streaming_pipeline(&AppState);
 
 	if (is_whisper_model_loaded(&AppState.WhisperState))
 	{

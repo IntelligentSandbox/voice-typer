@@ -10,4 +10,5 @@
 #include <QAudioDevice>
 #include <QMediaDevices>
 #include <QObject>
+#include <QMetaObject>
 #include <QPushButton>

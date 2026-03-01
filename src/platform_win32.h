@@ -29,6 +29,12 @@ struct AudioCaptureDevice
 	bool IsCapturing;
 };
 
+#define AUDIO_CAPTURE_SAMPLE_RATE    16000
+#define AUDIO_CAPTURE_CHANNELS       1
+#define AUDIO_CAPTURE_BITS_PER_SAMPLE 16
+#define AUDIO_CAPTURE_BUFFER_MS      100
+#define AUDIO_CAPTURE_BUFFER_COUNT   8
+
 inline
 std::vector<AudioInputDeviceInfo>
 query_audio_input_devices_native()
@@ -140,6 +146,15 @@ query_audio_input_devices_native()
 	CoUninitialize();
 
 	return Devices;
+}
+
+inline
+int
+query_logical_processor_count()
+{
+	SYSTEM_INFO SysInfo = {};
+	GetSystemInfo(&SysInfo);
+	return (int)SysInfo.dwNumberOfProcessors;
 }
 
 inline
