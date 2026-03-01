@@ -4,102 +4,139 @@
 #include "state.h"
 #include "control.h"
 
-void init_main_window(GlobalState *AppState)
+inline
+void
+init_main_window(GlobalState *AppState)
 {
-    // NOTE(warren): If need multiple screens of buttons/settings, although ideally just put everything on the first screen, 
-    // use multiple layouts I think and a tab/option bar at the top to switch between them.
-    QWidget *MainWindow = AppState->QtMainWindow;
-    QList<QAudioDevice> *AudioInputDevices = &(AppState->AudioInputDevices);
+	QWidget *MainWindow = AppState->QtMainWindow;
+	std::vector<AudioInputDeviceInfo> *AudioInputDevices = &(AppState->AudioInputDevices);
 
-    // ---- Left Column ----
-    QGridLayout *GridLayout = new QGridLayout(MainWindow);
-    
-    // Record Button
-    QPushButton *RecordButton = new QPushButton(MainWindow);
-    RecordButton->setStyleSheet(AppState->BUTTON_STYLE_GREEN);
-    RecordButton->setText("Record (Alt+F1)");
-    RecordButton->setMinimumHeight(60);
-    GridLayout->addWidget(RecordButton, 0, 0);
-    
-    AppState->RecordButton = RecordButton;
-    
-    QLabel *AudioSelectLabel = new QLabel("Audio Input", MainWindow);
-    GridLayout->addWidget(AudioSelectLabel, 1, 0);
+	QGridLayout *GridLayout = new QGridLayout(MainWindow);
+	int Row = 0;
 
-    QComboBox *AudioInputSelect = new QComboBox(MainWindow);
-    QString CurrentAudioDeviceDescription;
-    for (int i = 0; i < AudioInputDevices->size(); i++)
-    {
-        QAudioDevice Device = AudioInputDevices->at(i);
-        QString Description = Device.description();
-        AudioInputSelect->addItem(Description);
-        if (AppState->CurrentAudioDeviceIndex == i)
-        {
-            AudioInputSelect->setCurrentIndex(i);
-        }
-    }
-    AudioInputSelect->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-    GridLayout->addWidget(AudioInputSelect, 2, 0);
+	// Record Button
+	QPushButton *RecordButton = new QPushButton(MainWindow);
+	RecordButton->setStyleSheet(BUTTON_STYLE_GREEN);
+	RecordButton->setText("Record (Alt+F1)");
+	RecordButton->setMinimumHeight(60);
+	GridLayout->addWidget(RecordButton, Row++, 0);
+	AppState->RecordButton = RecordButton;
 
-    QLabel *ModelSelectLabel = new QLabel("STT Model", MainWindow);
-    GridLayout->addWidget(ModelSelectLabel, 3, 0);
-    QComboBox *ModelSelect = new QComboBox(MainWindow);
-    for (int i = 0; i < AppState->STTModels.size(); i++)
-    {
-        QString Description = AppState->STTModels.at(i);
-        ModelSelect->addItem(Description);
-        if (AppState->CurrentSTTModelIndex == i)
-        {
-            ModelSelect->setCurrentIndex(i);
-        }
-    }
-    GridLayout->addWidget(ModelSelect, 4, 0);
+	// Stream Button
+	QPushButton *StreamButton = new QPushButton(MainWindow);
+	StreamButton->setStyleSheet(BUTTON_STYLE_GREEN);
+	StreamButton->setText("Start Streaming (Alt+F2)");
+	StreamButton->setMinimumHeight(60);
+	GridLayout->addWidget(StreamButton, Row++, 0);
+	AppState->StreamButton = StreamButton;
 
-    QLabel *InferenceDeviceSelectLabel = new QLabel("Inference Device", MainWindow);
-    GridLayout->addWidget(InferenceDeviceSelectLabel, 5, 0);
-    QComboBox *InferenceDeviceSelect = new QComboBox(MainWindow);
-    for (int i = 0; i < AppState->InferenceDevices.size(); i++)
-    {
-        QString Description = AppState->InferenceDevices.at(i);
-        InferenceDeviceSelect->addItem(Description);
-        if (AppState->CurrentInferenceDeviceIndex == i)
-        {
-            InferenceDeviceSelect->setCurrentIndex(i);
-        }
-    }
+	// Audio Input
+	GridLayout->addWidget(new QLabel("Audio Input", MainWindow), Row++, 0);
+	QComboBox *AudioInputSelect = new QComboBox(MainWindow);
+	for (size_t i = 0; i < AudioInputDevices->size(); i++)
+	{
+		AudioInputDeviceInfo Device = AudioInputDevices->at(i);
+		AudioInputSelect->addItem(QString::fromStdString(Device.Name));
+		if (AppState->CurrentAudioDeviceIndex == (int)i)
+			AudioInputSelect->setCurrentIndex(i);
+		#ifdef DEBUG
+			qDebug() << "Initializing device input in select box.";
+			qDebug() << "Device.Name: " << Device.Name;
+		#endif
+	}
+	AudioInputSelect->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+	GridLayout->addWidget(AudioInputSelect, Row++, 0);
 
-    GridLayout->addWidget(InferenceDeviceSelect, 6, 0);
+	// STT Model
+	GridLayout->addWidget(new QLabel("STT Model", MainWindow), Row++, 0);
+	QComboBox *STTModelSelect = new QComboBox(MainWindow);
+	for (size_t i = 0; i < AppState->STTModels.size(); i++)
+	{
+		STTModelSelect->addItem(QString::fromStdString(AppState->STTModels.at(i)));
+		if (AppState->CurrentSTTModelIndex == (int)i)
+			STTModelSelect->setCurrentIndex(i);
+	}
+	GridLayout->addWidget(STTModelSelect, Row++, 0);
 
-    // ---- Right Column ----
-    QLabel *InferenceDeviceLabel = new QLabel("Transcription Stats: ", MainWindow);
-    GridLayout->addWidget(InferenceDeviceLabel, 0, 1);
+	// Load Model Button
+	QPushButton *LoadModelButton = new QPushButton(MainWindow);
+	LoadModelButton->setStyleSheet(BUTTON_STYLE_GREY);
+	LoadModelButton->setText("Load Selected STT Model");
+	LoadModelButton->setMinimumHeight(60);
+	GridLayout->addWidget(LoadModelButton, Row++, 0);
+	AppState->LoadModelButton = LoadModelButton;
 
-    // --- "Event Listeners" ----
-    QObject::connect(AudioInputSelect, &QComboBox::currentIndexChanged, [AppState](int index)
-    {
-        update_audio_input_selection(AppState, index);
-    });
+	#ifdef DEBUG
+		printf("[ui] Load Model button initialized (grey = not loaded)\n");
+	#endif
 
-    QObject::connect(InferenceDeviceSelect, &QComboBox::currentIndexChanged, [AppState](int index)
-    {
-        update_inference_device_selection(AppState, index);
-    });
+	// Inference Device
+	GridLayout->addWidget(new QLabel("Inference Device", MainWindow), Row++, 0);
+	QComboBox *InferenceDeviceSelect = new QComboBox(MainWindow);
+	for (size_t i = 0; i < AppState->InferenceDevices.size(); i++)
+	{
+		InferenceDeviceSelect->addItem(QString::fromStdString(AppState->InferenceDevices.at(i)));
+		if (AppState->CurrentInferenceDeviceIndex == (int)i)
+			InferenceDeviceSelect->setCurrentIndex(i);
+	}
+	GridLayout->addWidget(InferenceDeviceSelect, Row++, 0);
 
-    QObject::connect(RecordButton, &QPushButton::clicked, [AppState]()
-    {
-        toggle_recording(AppState);
-    });
+	// CPU Cores
+	GridLayout->addWidget(new QLabel("CPU Cores for Inference", MainWindow), Row++, 0);
+	QSpinBox *ThreadCountSpinner = new QSpinBox(MainWindow);
+	ThreadCountSpinner->setMinimum(1);
+	ThreadCountSpinner->setMaximum(query_logical_processor_count());
+	ThreadCountSpinner->setValue(AppState->WhisperThreadCount);
+	GridLayout->addWidget(ThreadCountSpinner, Row++, 0);
+
+	// --- Connections ---
+	QObject::connect(RecordButton, &QPushButton::clicked, [AppState]()
+	{
+		toggle_recording(AppState);
+	});
+
+	QObject::connect(StreamButton, &QPushButton::clicked, [AppState]()
+	{
+		toggle_streaming(AppState);
+	});
+
+	QObject::connect(AudioInputSelect, &QComboBox::currentIndexChanged, [AppState](int index)
+	{
+		update_audio_input_selection(AppState, index);
+	});
+
+	QObject::connect(STTModelSelect, &QComboBox::currentIndexChanged, [AppState](int index)
+	{
+		update_stt_model_selection(AppState, index);
+	});
+
+	QObject::connect(LoadModelButton, &QPushButton::clicked, [AppState]()
+	{
+		toggle_stt_model_load(AppState);
+	});
+
+	QObject::connect(InferenceDeviceSelect, &QComboBox::currentIndexChanged, [AppState](int index)
+	{
+		update_inference_device_selection(AppState, index);
+	});
+
+	QObject::connect(ThreadCountSpinner, &QSpinBox::valueChanged, [AppState](int value)
+	{
+		update_whisper_thread_count(AppState, value);
+	});
 }
 
-void init_ui(GlobalState *AppState)
+inline
+void
+init_ui(GlobalState *AppState)
 {
-    QFont Font("Georgia");
-    Font.setPointSize(12);
-    Font.setWeight(QFont::Bold);
-    AppState->QtApp->setFont(Font);
+	QFont Font("Georgia");
+	Font.setPointSize(12);
+	Font.setWeight(QFont::Bold);
+	AppState->QtApp->setFont(Font);
 
-    AppState->QtMainWindow->setWindowTitle("Voice Typer");
-    AppState->QtMainWindow->resize(AppState->WINDOW_DEFAULT_WIDTH, AppState->WINDOW_DEFAULT_HEIGHT);
+	AppState->QtMainWindow->setWindowTitle("Voice Typer");
+	AppState->QtMainWindow->resize(WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT);
 
-    init_main_window(AppState);
+	init_main_window(AppState);
 }

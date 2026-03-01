@@ -1,35 +1,60 @@
 #pragma once
 
 #include "qt.h"
+#include "platform_win32.h"
+#include "whisper_wrapper.h"
+
+#include <atomic>
+#include <mutex>
+#include <vector>
+#include <thread>
+
+#define WINDOW_DEFAULT_WIDTH 500
+#define WINDOW_DEFAULT_HEIGHT 500
+
+#define BUTTON_STYLE_GREEN "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: green;"
+#define BUTTON_STYLE_RED "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: #bF1121;"
+#define BUTTON_STYLE_GREY "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: #808080;"
+#define BUTTON_STYLE_BLUE "font-family: Georgia; font-size: 12pt; font-weight: bold; color: white; background-color: #2196F3;"
 
 struct GlobalState
 {
-    // Constants
-    const char *BUTTON_STYLE_GREEN = "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: green;";
-    const char *BUTTON_STYLE_RED = "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: #bF1121;";
-    const int WINDOW_DEFAULT_WIDTH = 500;
-    const int WINDOW_DEFAULT_HEIGHT = 200;
+	// UI
+	QApplication *QtApp;
+	QWidget *QtMainWindow;
+	QPushButton *RecordButton;
+	QPushButton *StreamButton;
+	QPushButton *LoadModelButton;
 
-    // UI
-    QApplication *QtApp;
-    QWidget *QtMainWindow;
-    QPushButton *RecordButton;
+	// Logic
+	bool IsRecording;
+	bool IsStreaming;
 
-    // Logic
-    bool IsRecording;
+	// Audio - platform-agnostic
+	int CurrentAudioDeviceIndex;
+	std::vector<AudioInputDeviceInfo> AudioInputDevices;
 
-    // Audio
-    int CurrentAudioDeviceIndex;
-    QList<QAudioDevice> AudioInputDevices;
+	// Inference Device 
+	int CurrentInferenceDeviceIndex;
+	std::vector<std::string> InferenceDevices;
 
-    // Inference Device 
-    int CurrentInferenceDeviceIndex;
-    QList<QString> InferenceDevices;
+	// Whisper Wrapper
+	int CurrentSTTModelIndex;
+	std::vector<std::string> STTModels;
+	WhisperModelState WhisperState;
 
-    // Whisper Wrapper
-    int CurrentSTTModelIndex;
-    QList<QString> STTModels;
+	// Audio capture pipeline
+	std::atomic<bool> CaptureRunning;
+	std::thread CaptureThread;
+	std::mutex AudioBufferMutex;
+	std::vector<float> AudioAccumBuffer;
 
-    // SystemInfo SystemInfo;
-    // CPUInfo CpuInfo;
+	// Inference threading
+	int WhisperThreadCount;
+
+	// Text injection target: captured when a pipeline starts, null if our own window was focused
+	HWND FocusedWindow;
+
+	// SystemInfo SystemInfo;
+	// CPUInfo CpuInfo;
 };

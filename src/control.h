@@ -1,45 +1,253 @@
 #pragma once
 
-void update_audio_input_selection(GlobalState *AppState, int index)
-{
-    AppState->CurrentAudioDeviceIndex = index;
-#ifdef DEBUG
-    qDebug() << "Selected audio input device index: " << index;
-    if (index < AppState->AudioInputDevices.size())
-    {
-        QAudioDevice Device = AppState->AudioInputDevices.at(index);
-        QString Description = Device.description();
-        qDebug() << "Selected audio input device description: " << Description;
-    }
+#include "state.h"
+#include "audio_pipeline.h"
+
+#ifdef _WIN32
+	#include <windows.h>
 #endif
+
+inline
+void
+update_audio_input_selection(GlobalState *AppState, int Index)
+{
+	AppState->CurrentAudioDeviceIndex = Index;
+	#ifdef DEBUG
+		printf("Selected audio input device index: %d\n", Index);
+		if (Index >= 0 && Index < (int)AppState->AudioInputDevices.size())
+		{
+			AudioInputDeviceInfo Device = AppState->AudioInputDevices.at(Index);
+			printf("Selected audio input device: %s\n", Device.Name.c_str());
+		}
+	#endif
 }
 
-void update_inference_device_selection(GlobalState *AppState, int index)
+inline
+void
+update_inference_device_selection(GlobalState *AppState, int Index)
 {
-    AppState->CurrentInferenceDeviceIndex = index;
-#ifdef DEBUG
-    qDebug() << "Selected inference device index: " << index;
-#endif
+	AppState->CurrentInferenceDeviceIndex = Index;
+	#ifdef DEBUG
+		printf("Selected inference device index: %d\n", Index);
+	#endif
 }
 
-void toggle_recording(GlobalState *AppState)
+inline
+void
+update_whisper_thread_count(GlobalState *AppState, int Count)
 {
-    AppState->IsRecording = !AppState->IsRecording;
-    
-    if (AppState->IsRecording)
-    {
-        AppState->RecordButton->setStyleSheet(AppState->BUTTON_STYLE_RED);
-        AppState->RecordButton->setText("Stop (Alt+F1)");
-    }
-    else
-    {
-        AppState->RecordButton->setStyleSheet(AppState->BUTTON_STYLE_GREEN);
-        AppState->RecordButton->setText("Record (Alt+F1)");
-    }
-#ifdef DEBUG
-    qDebug() << "Recording toggled to:" << AppState->IsRecording;
-#endif
+	if (Count < 1) Count = 1;
+	AppState->WhisperThreadCount = Count;
+	#ifdef DEBUG
+		printf("[control] Whisper thread count set to: %d\n", Count);
+	#endif
+}
 
-    // TODO(warren): start/stop audio recording
-    // for speed, we want to be able to stream it to whisper if possible.
+inline
+void
+update_stt_model_selection(GlobalState *AppState, int Index)
+{
+	AppState->CurrentSTTModelIndex = Index;
+
+	#ifdef DEBUG
+		printf("[control] Selected STT model index: %d\n", Index);
+	#endif
+
+	if (!is_whisper_model_loaded(&AppState->WhisperState)) return;
+	if (AppState->WhisperState.LoadedModelIndex == Index) return;
+
+	#ifdef DEBUG
+		printf("[control] Model index changed while loaded (%d -> %d), reloading\n",
+			AppState->WhisperState.LoadedModelIndex, Index);
+	#endif
+
+	AppState->LoadModelButton->setEnabled(false);
+	AppState->LoadModelButton->setText("Loading...");
+	AppState->LoadModelButton->repaint();
+	QApplication::processEvents();
+
+	bool Success = load_whisper_model(&AppState->WhisperState, Index);
+	AppState->LoadModelButton->setEnabled(true);
+	if (Success)
+	{
+		AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_BLUE);
+		AppState->LoadModelButton->setText("Unload STT Model");
+		#ifdef DEBUG
+			printf("[control] Model reloaded successfully\n");
+		#endif
+	}
+	else
+	{
+		AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_RED);
+		AppState->LoadModelButton->setText("Failed to load Model.");
+		#ifdef DEBUG
+			printf("[control] ERROR: Failed to reload model\n");
+		#endif
+	}
+}
+
+inline
+void
+toggle_recording(GlobalState *AppState)
+{
+	if (!is_whisper_model_loaded(&AppState->WhisperState))
+	{
+		#ifdef DEBUG
+			printf("[control] toggle_recording: no model loaded, ignoring\n");
+		#endif
+		return;
+	}
+
+	if (AppState->IsStreaming)
+	{
+		#ifdef DEBUG
+			printf("[control] toggle_recording: streaming is active, ignoring\n");
+		#endif
+		return;
+	}
+
+	AppState->IsRecording = !AppState->IsRecording;
+
+	if (AppState->IsRecording)
+	{
+		HWND Foreground = GetForegroundWindow();
+		HWND OwnWindow  = (HWND)AppState->QtMainWindow->winId();
+		AppState->FocusedWindow = (Foreground != OwnWindow) ? Foreground : nullptr;
+
+		bool Started = start_record_pipeline(AppState);
+		if (!Started)
+		{
+			AppState->IsRecording = false;
+			AppState->FocusedWindow = nullptr;
+			#ifdef DEBUG
+				printf("[control] toggle_recording: failed to start record pipeline\n");
+			#endif
+			return;
+		}
+		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_RED);
+		AppState->RecordButton->setText("Stop (Alt+F1)");
+		AppState->StreamButton->setEnabled(false);
+		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_GREY);
+	}
+	else
+	{
+		// Non-blocking: signal capture to stop. The pipeline thread will
+		// finish transcription in the background and restore both buttons.
+		signal_record_stop(AppState);
+		AppState->RecordButton->setEnabled(false);
+		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREY);
+		AppState->RecordButton->setText("Transcribing...");
+	}
+
+	#ifdef DEBUG
+		qDebug() << "Recording toggled to:" << AppState->IsRecording;
+	#endif
+}
+
+inline
+void
+toggle_streaming(GlobalState *AppState)
+{
+	if (!is_whisper_model_loaded(&AppState->WhisperState))
+	{
+		#ifdef DEBUG
+			printf("[control] toggle_streaming: no model loaded, ignoring\n");
+		#endif
+		return;
+	}
+
+	if (AppState->IsRecording)
+	{
+		#ifdef DEBUG
+			printf("[control] toggle_streaming: recording is active, ignoring\n");
+		#endif
+		return;
+	}
+
+	AppState->IsStreaming = !AppState->IsStreaming;
+
+	if (AppState->IsStreaming)
+	{
+		HWND Foreground = GetForegroundWindow();
+		HWND OwnWindow  = (HWND)AppState->QtMainWindow->winId();
+		AppState->FocusedWindow = (Foreground != OwnWindow) ? Foreground : nullptr;
+
+		bool Started = start_streaming_pipeline(AppState);
+		if (!Started)
+		{
+			AppState->IsStreaming = false;
+			AppState->FocusedWindow = nullptr;
+			#ifdef DEBUG
+				printf("[control] toggle_streaming: failed to start streaming pipeline\n");
+			#endif
+			return;
+		}
+		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_RED);
+		AppState->StreamButton->setText("Stop Streaming (Alt+F2)");
+		AppState->RecordButton->setEnabled(false);
+		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREY);
+	}
+	else
+	{
+		stop_streaming_pipeline(AppState);
+		AppState->FocusedWindow = nullptr;
+		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_GREEN);
+		AppState->StreamButton->setText("Start Streaming (Alt+F2)");
+		AppState->RecordButton->setEnabled(true);
+		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREEN);
+	}
+
+	#ifdef DEBUG
+		qDebug() << "Streaming toggled to:" << AppState->IsStreaming;
+	#endif
+}
+
+inline
+void
+toggle_stt_model_load(GlobalState *AppState)
+{
+	#ifdef DEBUG
+		printf("[control] toggle_stt_model_load called\n");
+	#endif
+
+	if (is_whisper_model_loaded(&AppState->WhisperState))
+	{
+		#ifdef DEBUG
+			printf("[control] Unloading STT model...\n");
+		#endif
+		unload_whisper_model(&AppState->WhisperState);
+
+		AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_GREY);
+		AppState->LoadModelButton->setText("Load Selected STT Model");
+
+		#ifdef DEBUG
+			printf("[control] STT model unloaded, button updated to grey\n");
+		#endif
+	}
+	else
+	{
+		AppState->LoadModelButton->setEnabled(false);
+		AppState->LoadModelButton->setText("Loading...");
+		AppState->LoadModelButton->repaint();
+
+		bool Success = load_whisper_model(&AppState->WhisperState, AppState->CurrentSTTModelIndex);
+		AppState->LoadModelButton->setEnabled(true);
+		if (Success)
+		{
+			AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_BLUE);
+			AppState->LoadModelButton->setText("Unload STT Model");
+			#ifdef DEBUG
+				printf("[control] STT model loaded successfully, button updated to blue\n");
+			#endif
+		}
+		else
+		{
+			AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_RED);
+			AppState->LoadModelButton->setText("Failed to load Model.");
+			#ifdef DEBUG
+				printf("[control] ERROR: Failed to load STT model\n");
+			#endif
+		}
+
+	}
 }

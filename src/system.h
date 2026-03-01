@@ -1,87 +1,135 @@
 #include "state.h"
+#include "control.h"
 
 #include <thread>
 #include <atomic>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
+	#ifdef _WIN32
+		#include <windows.h>
+		#include "platform_win32.h"
+	#endif
 
 std::atomic<bool> HotkeyThreadRunning = false;
 
-void hotkey_thread_func(GlobalState *AppState)
+inline
+void
+hotkey_thread_func(GlobalState *AppState)
 {
-    bool ToggleKeyWasDown = false;
+	bool RecordKeyWasDown  = false;
+	bool StreamKeyWasDown  = false;
 
-    while (HotkeyThreadRunning)
-    {
-        // TODO(warren): Might want to allow the user to change the keyboard shortcut, if some apps listen for Alt+F1 already and intercept it or something.
-        
-#ifdef _WIN32
-        bool ToggleKeyIsDown = GetAsyncKeyState(VK_F1) & 0x8000 && GetAsyncKeyState(VK_MENU) & 0x8000;
+	while (HotkeyThreadRunning)
+	{
+		#ifdef _WIN32
+			bool AltDown = GetAsyncKeyState(VK_MENU) & 0x8000;
 
-        if (ToggleKeyIsDown && !ToggleKeyWasDown)
-        {
-            toggle_recording(AppState);
-        }
+			bool RecordKeyIsDown = AltDown && (GetAsyncKeyState(VK_F1) & 0x8000);
+			bool StreamKeyIsDown = AltDown && (GetAsyncKeyState(VK_F2) & 0x8000);
 
-        ToggleKeyWasDown = ToggleKeyIsDown;
-        Sleep(1);
-#endif
-    }
+			if (RecordKeyIsDown && !RecordKeyWasDown)
+			{
+				QMetaObject::invokeMethod(
+					AppState->QtApp,
+					[AppState]() { toggle_recording(AppState); },
+					Qt::QueuedConnection);
+			}
+
+			if (StreamKeyIsDown && !StreamKeyWasDown)
+			{
+				QMetaObject::invokeMethod(
+					AppState->QtApp,
+					[AppState]() { toggle_streaming(AppState); },
+					Qt::QueuedConnection);
+			}
+
+			RecordKeyWasDown = RecordKeyIsDown;
+			StreamKeyWasDown = StreamKeyIsDown;
+			Sleep(1);
+		#endif
+	}
 }
 
-void start_hotkey_listener(GlobalState *AppState)
+inline
+void
+start_hotkey_listener(GlobalState *AppState)
 {
-    HotkeyThreadRunning = true;
-    std::thread(hotkey_thread_func, AppState).detach();
+	HotkeyThreadRunning = true;
+	std::thread(hotkey_thread_func, AppState).detach();
 }
 
-void stop_hotkey_listener()
+inline
+void
+stop_hotkey_listener()
 {
-    HotkeyThreadRunning = false;
+	HotkeyThreadRunning = false;
 }
 
-void query_audio_input_devices(GlobalState *AppState)
+inline
+void
+query_audio_input_devices(GlobalState *AppState)
 {
-    AppState->CurrentAudioDeviceIndex = -1;
-    AppState->AudioInputDevices = QMediaDevices::audioInputs();
-
-    QString DefaultAudioDeviceDescription = QMediaDevices::defaultAudioInput().description();
-    for (int i = 0; i < AppState->AudioInputDevices.size(); i++)
-    {
-        QString Description = AppState->AudioInputDevices.at(i).description();
-        if (DefaultAudioDeviceDescription == Description)
-        {
-            AppState->CurrentAudioDeviceIndex = i;
-            break;
-        }
-    }
-
-    if (AppState->CurrentAudioDeviceIndex == -1 && AppState->AudioInputDevices.size() > 0)
-    {
-        AppState->CurrentAudioDeviceIndex = 0;
-    }
-    // TODO(warren): if CurrentAudioDeviceIndex is still -1, assume no audio input devices. Then what?
+	AppState->CurrentAudioDeviceIndex = -1;
+	
+	std::vector<AudioInputDeviceInfo> NativeDevices = query_audio_input_devices_native();
+	
+	AppState->AudioInputDevices = NativeDevices;
+	
+	if (AppState->AudioInputDevices.size() > 0)
+	{
+		AppState->CurrentAudioDeviceIndex = 0;
+	}
+	
+	#ifdef DEBUG
+		qDebug() << "Audio input devices found:" << AppState->AudioInputDevices.size();
+		for (const auto &Info : AppState->AudioInputDevices)
+		{
+			qDebug() << "  Device:" << Info.Name.c_str() << "(index" << Info.Index << ")";
+		}
+	#endif
 }
 
-void query_inference_devices(GlobalState *AppState)
+inline
+void
+query_inference_devices(GlobalState *AppState)
 {
-    // TODO(warren): When we have the CPU name, use that instead.
-    AppState->InferenceDevices = QList<QString>();
-    AppState->InferenceDevices.append("CPU");
-    AppState->CurrentInferenceDeviceIndex = 0;
+	AppState->InferenceDevices.clear();
+	AppState->InferenceDevices.push_back("CPU");
+	AppState->CurrentInferenceDeviceIndex = 0;
 
-    // TODO(warren): Same thing for GPUs...
-    // And maybe in the future if auto detect a good gpu, default to that.
-    AppState->InferenceDevices.append("GPU");
+	// TODO(warren): In the future, enable GPU support for dedicated cards like NVIDIA
+	// AppState->InferenceDevices.push_back("GPU");
 }
 
-void query_available_stt_models(GlobalState *AppState)
+inline
+void
+query_whisper_thread_count(GlobalState *AppState)
 {
-    AppState->STTModels = QList<QString>();
+	int LogicalCores = query_logical_processor_count();
+	int ThreadCount  = LogicalCores / 2;
+	if (ThreadCount < 1) ThreadCount = 1;
 
-    // TODO(warren): Validate model file is present before setting in future.
-    AppState->STTModels.append("Whisper.cpp (GGML) - base.en");
-    AppState->CurrentSTTModelIndex = 0;
+	AppState->WhisperThreadCount = ThreadCount;
+
+	#ifdef DEBUG
+		printf("[system] Logical processors: %d, whisper thread count: %d\n",
+			LogicalCores, ThreadCount);
+	#endif
+}
+
+// TODO(warren): Assuming all the model files are present. 
+// Maybe want to actually look to see if they are present on disk, but if they
+// aren't, do we want to just download them automatically from huggingface?
+inline
+void
+query_available_stt_models(GlobalState *AppState)
+{
+	AppState->STTModels.clear();
+
+	AppState->STTModels.push_back("Whisper tiny.en (75 MB)");
+	AppState->STTModels.push_back("Whisper base.en (142 MB)");
+	AppState->STTModels.push_back("Whisper small.en (466 MB)");
+	AppState->STTModels.push_back("Whisper medium.en (1.5 GB)");
+	AppState->STTModels.push_back("Whisper large-v3-turbo (1.5 GB)");
+
+	AppState->CurrentSTTModelIndex = WHISPER_MODEL_BASE_EN;
 }

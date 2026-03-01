@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(VoiceTyper VERSION 1.0.0 LANGUAGES CXX)
+project(VoiceTyper VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,10 +14,27 @@ find_package(Qt6 REQUIRED COMPONENTS
     Multimedia
 )
 
+# whisper.cpp configuration - CPU only for now
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(GGML_CUDA OFF CACHE BOOL "" FORCE)
+set(GGML_METAL OFF CACHE BOOL "" FORCE)
+set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
+set(GGML_SYCL OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(src/external/whisper.cpp)
+
 set(SOURCES src/main.cpp)
 
 qt_standard_project_setup()
 qt_add_executable(${PROJECT_NAME} ${SOURCES})
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/external/whisper.cpp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/external/whisper.cpp/ggml/include
+)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
@@ -28,6 +45,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::Multimedia
+    whisper
 )
 
 if(WIN32)
