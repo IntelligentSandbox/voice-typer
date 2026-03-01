@@ -28,12 +28,16 @@ void init_main_window(GlobalState *AppState)
 	for (size_t i = 0; i < AudioInputDevices->size(); i++)
 	{
 		AudioInputDeviceInfo Device = AudioInputDevices->at(i);
-		QString Description = QString::fromUtf8(Device.Name.c_str());
+		QString Description = QString::fromStdString(Device.Name);
 		AudioInputSelect->addItem(Description);
-		if (AppState->CurrentAudioDeviceIndex == (int)i)
+		if (AppState->CurrentAudioDeviceIndex == i)
 		{
-			AudioInputSelect->setCurrentIndex((int)i);
+			AudioInputSelect->setCurrentIndex(i);
 		}
+#ifdef DEBUG
+        qDebug() << "Initializing device input in select box.";
+        qDebug() << "Device.Name: " << Device.Name;
+#endif
 	}
 	AudioInputSelect->setSizeAdjustPolicy(QComboBox::AdjustToContents);
 	GridLayout->addWidget(AudioInputSelect, 2, 0);
@@ -41,7 +45,7 @@ void init_main_window(GlobalState *AppState)
     QLabel *ModelSelectLabel = new QLabel("STT Model", MainWindow);
     GridLayout->addWidget(ModelSelectLabel, 3, 0);
     QComboBox *ModelSelect = new QComboBox(MainWindow);
-    for (int i = 0; i < AppState->STTModels.size(); i++)
+    for (size_t i = 0; i < AppState->STTModels.size(); i++)
     {
         QString Description = AppState->STTModels.at(i);
         ModelSelect->addItem(Description);
@@ -55,7 +59,7 @@ void init_main_window(GlobalState *AppState)
     QLabel *InferenceDeviceSelectLabel = new QLabel("Inference Device", MainWindow);
     GridLayout->addWidget(InferenceDeviceSelectLabel, 5, 0);
     QComboBox *InferenceDeviceSelect = new QComboBox(MainWindow);
-    for (int i = 0; i < AppState->InferenceDevices.size(); i++)
+    for (size_t i = 0; i < AppState->InferenceDevices.size(); i++)
     {
         QString Description = AppState->InferenceDevices.at(i);
         InferenceDeviceSelect->addItem(Description);

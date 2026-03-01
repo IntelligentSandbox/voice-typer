@@ -3,8 +3,8 @@
 #include "qt.h"
 #include "platform_win32.h"
 
-#define WINDOW_DEFAULT_WIDTH 500
-#define WINDOW_DEFAULT_HEIGHT 200
+#define WINDOW_DEFAULT_WIDTH 750
+#define WINDOW_DEFAULT_HEIGHT 300
 
 struct GlobalState
 {
