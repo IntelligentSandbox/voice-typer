@@ -12,3 +12,4 @@
 #include <QObject>
 #include <QMetaObject>
 #include <QPushButton>
+#include <QSpinBox>

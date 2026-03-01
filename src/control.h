@@ -34,6 +34,17 @@ update_inference_device_selection(GlobalState *AppState, int Index)
 
 inline
 void
+update_whisper_thread_count(GlobalState *AppState, int Count)
+{
+	if (Count < 1) Count = 1;
+	AppState->WhisperThreadCount = Count;
+	#ifdef DEBUG
+		printf("[control] Whisper thread count set to: %d\n", Count);
+	#endif
+}
+
+inline
+void
 update_stt_model_selection(GlobalState *AppState, int Index)
 {
 	AppState->CurrentSTTModelIndex = Index;

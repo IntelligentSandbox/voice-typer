@@ -407,6 +407,7 @@ signal_record_stop(GlobalState *AppState)
 	#endif
 }
 
+// TODO(warren): kinda janky still.
 inline
 bool
 start_streaming_pipeline(GlobalState *AppState)

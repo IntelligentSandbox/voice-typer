@@ -9,8 +9,8 @@
 #include <vector>
 #include <thread>
 
-#define WINDOW_DEFAULT_WIDTH 750
-#define WINDOW_DEFAULT_HEIGHT 300
+#define WINDOW_DEFAULT_WIDTH 500
+#define WINDOW_DEFAULT_HEIGHT 500
 
 #define BUTTON_STYLE_GREEN "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: green;"
 #define BUTTON_STYLE_RED "font-family: Georgia; font-size: 12pt; font-weight: bold; color: black; background-color: #bF1121;"
