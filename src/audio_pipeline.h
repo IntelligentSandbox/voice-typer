@@ -240,7 +240,12 @@ run_whisper_on_chunk(GlobalState *AppState, whisper_full_params &Params, std::ve
 
 	if (!Transcription.empty())
 	{
-		printf("[transcription] %s\n", Transcription.c_str());
+		#ifdef DEBUG
+			printf("[transcription] %s\n", Transcription.c_str());
+		#else
+			if (!AppState->FocusedWindow)
+				printf("[transcription] %s\n", Transcription.c_str());
+		#endif
 		#ifdef _WIN32
 			inject_text_to_window(AppState->FocusedWindow, Transcription.c_str());
 		#endif

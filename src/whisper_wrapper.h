@@ -61,7 +61,7 @@ get_model_path_for_index(int ModelIndex)
 		#ifdef DEBUG
 			printf("[whisper_wrapper] Invalid model index %d, defaulting to base.en\n", ModelIndex);
 		#endif
-		return WHISPER_MODEL_PATHS[WHISPER_MODEL_BASE_EN];
+		ModelIndex = WHISPER_MODEL_BASE_EN;
 	}
 	return WHISPER_MODEL_PATHS[ModelIndex];
 }
