@@ -15,14 +15,18 @@ inline
 void
 hotkey_thread_func(GlobalState *AppState)
 {
-	bool ToggleKeyWasDown = false;
+	bool RecordKeyWasDown  = false;
+	bool StreamKeyWasDown  = false;
 
 	while (HotkeyThreadRunning)
 	{
 		#ifdef _WIN32
-			bool ToggleKeyIsDown = GetAsyncKeyState(VK_F1) & 0x8000 && GetAsyncKeyState(VK_MENU) & 0x8000;
+			bool AltDown = GetAsyncKeyState(VK_MENU) & 0x8000;
 
-			if (ToggleKeyIsDown && !ToggleKeyWasDown)
+			bool RecordKeyIsDown = AltDown && (GetAsyncKeyState(VK_F1) & 0x8000);
+			bool StreamKeyIsDown = AltDown && (GetAsyncKeyState(VK_F2) & 0x8000);
+
+			if (RecordKeyIsDown && !RecordKeyWasDown)
 			{
 				QMetaObject::invokeMethod(
 					AppState->QtApp,
@@ -30,7 +34,16 @@ hotkey_thread_func(GlobalState *AppState)
 					Qt::QueuedConnection);
 			}
 
-			ToggleKeyWasDown = ToggleKeyIsDown;
+			if (StreamKeyIsDown && !StreamKeyWasDown)
+			{
+				QMetaObject::invokeMethod(
+					AppState->QtApp,
+					[AppState]() { toggle_streaming(AppState); },
+					Qt::QueuedConnection);
+			}
+
+			RecordKeyWasDown = RecordKeyIsDown;
+			StreamKeyWasDown = StreamKeyIsDown;
 			Sleep(1);
 		#endif
 	}
@@ -84,7 +97,7 @@ query_inference_devices(GlobalState *AppState)
 	AppState->CurrentInferenceDeviceIndex = 0;
 
 	// TODO(warren): In the future, enable GPU support for dedicated cards like NVIDIA
-	AppState->InferenceDevices.push_back("GPU");
+	// AppState->InferenceDevices.push_back("GPU");
 }
 
 inline

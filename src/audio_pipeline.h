@@ -9,6 +9,7 @@
 #include <atomic>
 #include <mutex>
 #include <vector>
+#include <string>
 
 #include <windows.h>
 #include <mmsystem.h>
@@ -229,11 +230,20 @@ run_whisper_on_chunk(GlobalState *AppState, whisper_full_params &Params, std::ve
 	}
 
 	int NumSegments = whisper_full_n_segments(AppState->WhisperState.Context);
+	std::string Transcription;
 	for (int i = 0; i < NumSegments; i++)
 	{
 		const char *Text = whisper_full_get_segment_text(AppState->WhisperState.Context, i);
 		if (Text && Text[0] != '\0')
-			printf("[transcription] %s\n", Text);
+			Transcription += Text;
+	}
+
+	if (!Transcription.empty())
+	{
+		printf("[transcription] %s\n", Transcription.c_str());
+		#ifdef _WIN32
+			inject_text_to_window(AppState->FocusedWindow, Transcription.c_str());
+		#endif
 	}
 }
 
@@ -324,9 +334,12 @@ record_pipeline_thread(GlobalState *AppState, int DeviceIndex)
 		[AppState]()
 		{
 			AppState->IsRecording = false;
+			AppState->FocusedWindow = nullptr;
 			AppState->RecordButton->setEnabled(true);
 			AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREEN);
 			AppState->RecordButton->setText("Record (Alt+F1)");
+			AppState->StreamButton->setEnabled(true);
+			AppState->StreamButton->setStyleSheet(BUTTON_STYLE_GREEN);
 		},
 		Qt::QueuedConnection);
 }

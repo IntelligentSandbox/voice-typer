@@ -149,6 +149,42 @@ query_audio_input_devices_native()
 }
 
 inline
+void
+inject_text_to_window(HWND TargetWindow, const char *Utf8Text)
+{
+	if (!TargetWindow || !Utf8Text || Utf8Text[0] == '\0') return;
+
+	int WideLen = MultiByteToWideChar(CP_UTF8, 0, Utf8Text, -1, nullptr, 0);
+	if (WideLen <= 1) return;
+
+	std::wstring Wide(WideLen - 1, L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, Utf8Text, -1, &Wide[0], WideLen);
+
+	std::vector<INPUT> Inputs;
+	Inputs.reserve(Wide.size() * 2);
+
+	for (wchar_t Wc : Wide)
+	{
+		INPUT KeyDown = {};
+		KeyDown.type           = INPUT_KEYBOARD;
+		KeyDown.ki.wVk         = 0;
+		KeyDown.ki.wScan       = Wc;
+		KeyDown.ki.dwFlags     = KEYEVENTF_UNICODE;
+		KeyDown.ki.time        = 0;
+		KeyDown.ki.dwExtraInfo = 0;
+
+		INPUT KeyUp = KeyDown;
+		KeyUp.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+
+		Inputs.push_back(KeyDown);
+		Inputs.push_back(KeyUp);
+	}
+
+	SetForegroundWindow(TargetWindow);
+	SendInput((UINT)Inputs.size(), Inputs.data(), sizeof(INPUT));
+}
+
+inline
 int
 query_logical_processor_count()
 {

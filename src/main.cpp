@@ -20,6 +20,7 @@ int main(int argc, char *argv[])
 	AppState.IsRecording = false;
 	AppState.IsStreaming = false;
 	AppState.CaptureRunning = false;
+	AppState.FocusedWindow = nullptr;
 
 	init_whisper_state(&AppState.WhisperState);
 

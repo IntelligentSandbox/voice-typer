@@ -3,6 +3,10 @@
 #include "state.h"
 #include "audio_pipeline.h"
 
+#ifdef _WIN32
+	#include <windows.h>
+#endif
+
 inline
 void
 update_audio_input_selection(GlobalState *AppState, int Index)
@@ -83,14 +87,27 @@ toggle_recording(GlobalState *AppState)
 		return;
 	}
 
+	if (AppState->IsStreaming)
+	{
+		#ifdef DEBUG
+			printf("[control] toggle_recording: streaming is active, ignoring\n");
+		#endif
+		return;
+	}
+
 	AppState->IsRecording = !AppState->IsRecording;
 
 	if (AppState->IsRecording)
 	{
+		HWND Foreground = GetForegroundWindow();
+		HWND OwnWindow  = (HWND)AppState->QtMainWindow->winId();
+		AppState->FocusedWindow = (Foreground != OwnWindow) ? Foreground : nullptr;
+
 		bool Started = start_record_pipeline(AppState);
 		if (!Started)
 		{
 			AppState->IsRecording = false;
+			AppState->FocusedWindow = nullptr;
 			#ifdef DEBUG
 				printf("[control] toggle_recording: failed to start record pipeline\n");
 			#endif
@@ -98,11 +115,13 @@ toggle_recording(GlobalState *AppState)
 		}
 		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_RED);
 		AppState->RecordButton->setText("Stop (Alt+F1)");
+		AppState->StreamButton->setEnabled(false);
+		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_GREY);
 	}
 	else
 	{
 		// Non-blocking: signal capture to stop. The pipeline thread will
-		// finish transcription in the background and restore the button.
+		// finish transcription in the background and restore both buttons.
 		signal_record_stop(AppState);
 		AppState->RecordButton->setEnabled(false);
 		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREY);
@@ -126,27 +145,45 @@ toggle_streaming(GlobalState *AppState)
 		return;
 	}
 
+	if (AppState->IsRecording)
+	{
+		#ifdef DEBUG
+			printf("[control] toggle_streaming: recording is active, ignoring\n");
+		#endif
+		return;
+	}
+
 	AppState->IsStreaming = !AppState->IsStreaming;
 
 	if (AppState->IsStreaming)
 	{
+		HWND Foreground = GetForegroundWindow();
+		HWND OwnWindow  = (HWND)AppState->QtMainWindow->winId();
+		AppState->FocusedWindow = (Foreground != OwnWindow) ? Foreground : nullptr;
+
 		bool Started = start_streaming_pipeline(AppState);
 		if (!Started)
 		{
 			AppState->IsStreaming = false;
+			AppState->FocusedWindow = nullptr;
 			#ifdef DEBUG
 				printf("[control] toggle_streaming: failed to start streaming pipeline\n");
 			#endif
 			return;
 		}
 		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_RED);
-		AppState->StreamButton->setText("Stop Streaming");
+		AppState->StreamButton->setText("Stop Streaming (Alt+F2)");
+		AppState->RecordButton->setEnabled(false);
+		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREY);
 	}
 	else
 	{
 		stop_streaming_pipeline(AppState);
+		AppState->FocusedWindow = nullptr;
 		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_GREEN);
-		AppState->StreamButton->setText("Start Streaming");
+		AppState->StreamButton->setText("Start Streaming (Alt+F2)");
+		AppState->RecordButton->setEnabled(true);
+		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREEN);
 	}
 
 	#ifdef DEBUG

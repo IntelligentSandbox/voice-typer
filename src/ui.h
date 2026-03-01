@@ -26,7 +26,7 @@ init_main_window(GlobalState *AppState)
 	// Stream Button
 	QPushButton *StreamButton = new QPushButton(MainWindow);
 	StreamButton->setStyleSheet(BUTTON_STYLE_GREEN);
-	StreamButton->setText("Start Streaming");
+	StreamButton->setText("Start Streaming (Alt+F2)");
 	StreamButton->setMinimumHeight(60);
 	GridLayout->addWidget(StreamButton, 1, 0);
 
