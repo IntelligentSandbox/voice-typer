@@ -27,6 +27,10 @@
 // Shared internals
 // ---------------------------------------------------------------------------
 
+// TODO(warren): These data structures are WIN32 dependent right now.
+// We should break it into platform agnostic, and any WIN32 stuff should be in platform_win32.h
+// Details not sure yet, but the agreement is that we definitely pass std::vector<int16_t> audio data.
+// Win32 specific data structures...idk put where or hide inside of what functions, yet.
 struct WaveInBuffer
 {
 	WAVEHDR Header;
@@ -49,8 +53,7 @@ wavein_proc(
 	DWORD_PTR dwParam1,
 	DWORD_PTR dwParam2)
 {
-	if (uMsg != WIM_DATA)
-		return;
+	if (uMsg != WIM_DATA) return;
 
 	AudioPipelineContext *Ctx = reinterpret_cast<AudioPipelineContext*>(dwInstance);
 	SetEvent(Ctx->ReadyEvent);
@@ -59,24 +62,30 @@ wavein_proc(
 static float
 compute_rms(const float *Samples, int Count)
 {
-	if (Count <= 0)
-		return 0.0f;
+	if (Count <= 0) return 0.0f;
 
 	double Sum = 0.0;
 	for (int i = 0; i < Count; i++)
+	{
 		Sum += (double)Samples[i] * (double)Samples[i];
+	}
 
 	return (float)sqrt(Sum / (double)Count);
 }
 
+// TODO(warren): This function uses WIN32 API.
+// We want to keep this function interface platform agnostic, which it is right now. But the internals
+// are platform dependent. Thinking, should just put individual platforms code inside this func
+// and use preprocessor macros to separate what actually gets compiled, or duplicate this
+// function definition in separate platform specific files with same interface?
+//
 // Opens the WaveIn device, queues buffers, starts capture, and pumps completed
 // buffers into AppState->AudioAccumBuffer until CaptureRunning goes false.
 // Caller is responsible for setting CaptureRunning before calling.
 static bool
 run_wavein_capture(GlobalState *AppState, int DeviceIndex)
 {
-	const int SamplesPerBuffer =
-		(AUDIO_CAPTURE_SAMPLE_RATE * AUDIO_CAPTURE_BUFFER_MS) / 1000;
+	const int SamplesPerBuffer = (AUDIO_CAPTURE_SAMPLE_RATE * AUDIO_CAPTURE_BUFFER_MS) / 1000;
 
 	AudioPipelineContext PipeCtx = {};
 	PipeCtx.Running = &AppState->CaptureRunning;
@@ -138,8 +147,7 @@ run_wavein_capture(GlobalState *AppState, int DeviceIndex)
 		for (int i = 0; i < AUDIO_CAPTURE_BUFFER_COUNT; i++)
 		{
 			WAVEHDR &Hdr = PipeCtx.Buffers[i].Header;
-			if (!(Hdr.dwFlags & WHDR_DONE))
-				continue;
+			if (!(Hdr.dwFlags & WHDR_DONE)) continue;
 
 			int SamplesGot = (int)(Hdr.dwBytesRecorded / sizeof(int16_t));
 			if (SamplesGot > 0)
@@ -149,7 +157,9 @@ run_wavein_capture(GlobalState *AppState, int DeviceIndex)
 				size_t OldSize = AppState->AudioAccumBuffer.size();
 				AppState->AudioAccumBuffer.resize(OldSize + SamplesGot);
 				for (int j = 0; j < SamplesGot; j++)
+				{
 					AppState->AudioAccumBuffer[OldSize + j] = Src[j] / 32768.0f;
+				}
 			}
 
 			Hdr.dwFlags         = 0;
@@ -163,9 +173,9 @@ run_wavein_capture(GlobalState *AppState, int DeviceIndex)
 	waveInReset(PipeCtx.WaveInHandle);
 
 	for (int i = 0; i < AUDIO_CAPTURE_BUFFER_COUNT; i++)
-    {
-        waveInUnprepareHeader(PipeCtx.WaveInHandle, &PipeCtx.Buffers[i].Header, sizeof(WAVEHDR));
-    }
+	{
+		waveInUnprepareHeader(PipeCtx.WaveInHandle, &PipeCtx.Buffers[i].Header, sizeof(WAVEHDR));
+	}
 
 	waveInClose(PipeCtx.WaveInHandle);
 	CloseHandle(PipeCtx.ReadyEvent);
@@ -235,7 +245,9 @@ run_whisper_on_chunk(GlobalState *AppState, whisper_full_params &Params, std::ve
 	{
 		const char *Text = whisper_full_get_segment_text(AppState->WhisperState.Context, i);
 		if (Text && Text[0] != '\0')
+		{
 			Transcription += Text;
+		}
 	}
 
 	if (!Transcription.empty())
@@ -271,13 +283,17 @@ stream_infer_thread(GlobalState *AppState)
 		Sleep(3000);
 
 		if (!AppState->CaptureRunning.load())
+		{
 			break;
+		}
 
 		std::vector<float> Chunk;
 		{
 			std::lock_guard<std::mutex> Lock(AppState->AudioBufferMutex);
 			if ((int)AppState->AudioAccumBuffer.size() < PIPELINE_STREAM_CHUNK_SAMPLES)
+			{
 				continue;
+			}
 
 			Chunk = std::move(AppState->AudioAccumBuffer);
 			AppState->AudioAccumBuffer.clear();
@@ -342,7 +358,7 @@ record_pipeline_thread(GlobalState *AppState, int DeviceIndex)
 			AppState->FocusedWindow = nullptr;
 			AppState->RecordButton->setEnabled(true);
 			AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREEN);
-			AppState->RecordButton->setText("Record (Alt+F1)");
+			AppState->RecordButton->setText(record_button_idle_label(AppState));
 			AppState->StreamButton->setEnabled(true);
 			AppState->StreamButton->setStyleSheet(BUTTON_STYLE_GREEN);
 		},

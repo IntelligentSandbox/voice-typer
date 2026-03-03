@@ -71,7 +71,8 @@ update_stt_model_selection(GlobalState *AppState, int Index)
 	if (Success)
 	{
 		AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_BLUE);
-		AppState->LoadModelButton->setText("Unload STT Model");
+		AppState->LoadModelButton->setText(
+			QString("Unload STT Model (%1)").arg(AppState->LoadModelHotkey.to_label()));
 		#ifdef DEBUG
 			printf("[control] Model reloaded successfully\n");
 		#endif
@@ -125,7 +126,7 @@ toggle_recording(GlobalState *AppState)
 			return;
 		}
 		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_RED);
-		AppState->RecordButton->setText("Stop (Alt+F1)");
+		AppState->RecordButton->setText(QString("Stop (%1)").arg(AppState->RecordHotkey.to_label()));
 		AppState->StreamButton->setEnabled(false);
 		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_GREY);
 	}
@@ -183,7 +184,7 @@ toggle_streaming(GlobalState *AppState)
 			return;
 		}
 		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_RED);
-		AppState->StreamButton->setText("Stop Streaming (Alt+F2)");
+		AppState->StreamButton->setText(QString("Stop Streaming (%1)").arg(AppState->StreamHotkey.to_label()));
 		AppState->RecordButton->setEnabled(false);
 		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREY);
 	}
@@ -192,13 +193,52 @@ toggle_streaming(GlobalState *AppState)
 		stop_streaming_pipeline(AppState);
 		AppState->FocusedWindow = nullptr;
 		AppState->StreamButton->setStyleSheet(BUTTON_STYLE_GREEN);
-		AppState->StreamButton->setText("Start Streaming (Alt+F2)");
+		AppState->StreamButton->setText(stream_button_idle_label(AppState));
 		AppState->RecordButton->setEnabled(true);
 		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREEN);
+		AppState->RecordButton->setText(record_button_idle_label(AppState));
 	}
 
 	#ifdef DEBUG
 		qDebug() << "Streaming toggled to:" << AppState->IsStreaming;
+	#endif
+}
+
+// Saves and applies a hotkey update for a single action.
+// JsonKey   : JSON field name (e.g. "record_hotkey")
+// Target    : pointer to the HotkeyConfig in GlobalState to overwrite
+// NewHotkey : the new value to store
+// After saving, RefreshLabels() is called so every button label stays current.
+inline
+void
+apply_hotkey(GlobalState *AppState,
+             const char  *JsonKey,
+             HotkeyConfig *Target,
+             HotkeyConfig  NewHotkey)
+{
+	*Target = NewHotkey;
+
+	save_hotkey_setting(JsonKey, (int)NewHotkey.Modifiers, (int)NewHotkey.Key);
+
+	// Refresh all three button labels — hotkeys can change any of them
+	AppState->RecordButton->setText(record_button_idle_label(AppState));
+	AppState->StreamButton->setText(stream_button_idle_label(AppState));
+
+	// LoadModelButton label depends on whether a model is currently loaded
+	if (!is_whisper_model_loaded(&AppState->WhisperState))
+	{
+		AppState->LoadModelButton->setText(load_model_button_idle_label(AppState));
+	}
+	else
+	{
+		AppState->LoadModelButton->setText(
+			QString("Unload STT Model (%1)").arg(AppState->LoadModelHotkey.to_label())
+		);
+	}
+
+	#ifdef DEBUG
+		printf("[control] Hotkey '%s' updated to: %s\n",
+			JsonKey, NewHotkey.to_label().toUtf8().constData());
 	#endif
 }
 
@@ -218,7 +258,7 @@ toggle_stt_model_load(GlobalState *AppState)
 		unload_whisper_model(&AppState->WhisperState);
 
 		AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_GREY);
-		AppState->LoadModelButton->setText("Load Selected STT Model");
+		AppState->LoadModelButton->setText(load_model_button_idle_label(AppState));
 
 		#ifdef DEBUG
 			printf("[control] STT model unloaded, button updated to grey\n");
@@ -235,7 +275,8 @@ toggle_stt_model_load(GlobalState *AppState)
 		if (Success)
 		{
 			AppState->LoadModelButton->setStyleSheet(BUTTON_STYLE_BLUE);
-			AppState->LoadModelButton->setText("Unload STT Model");
+			AppState->LoadModelButton->setText(
+				QString("Unload STT Model (%1)").arg(AppState->LoadModelHotkey.to_label()));
 			#ifdef DEBUG
 				printf("[control] STT model loaded successfully, button updated to blue\n");
 			#endif

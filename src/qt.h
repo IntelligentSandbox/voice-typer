@@ -13,3 +13,12 @@
 #include <QMetaObject>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QDialog>
+#include <QKeySequenceEdit>
+#include <QKeySequence>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QDir>
+#include <QFileInfo>
+#include <QFile>
+#include <QMessageBox>

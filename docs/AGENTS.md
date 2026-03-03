@@ -10,9 +10,10 @@ use tab chars for indentation
 use lf line endings
 follow the existing coding guidelines
 do not remove code comments unless explicitly directed to
-build the project using `build.bat debug`
+ensure changes pass both release and debug builds by using `build.bat` and `build.bat debug`
 use early returns in logical flow where possible, helps to reduce code indentation
 try not to have long lines (more than 120 chars), unroll onto newlines if needed
 do not insert comments unless explicitly directed to
 single line if statements are allowed without curly brackets but must be on the same line and within 120 chars; otherwise, put in curly brackets on newlines.
 single statement for loops must be in curly brackets
+any if and else statements must use curly brackets for both block scopes

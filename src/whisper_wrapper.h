@@ -15,18 +15,18 @@ enum WhisperModelIndex
 {
 	WHISPER_MODEL_TINY_EN = 0,
 	WHISPER_MODEL_BASE_EN = 1,
-	WHISPER_MODEL_SMALL_EN = 2,
-	WHISPER_MODEL_MEDIUM_EN = 3,
-	WHISPER_MODEL_LARGE_V3_TURBO = 4,
-	WHISPER_MODEL_COUNT = 5
+	// WHISPER_MODEL_SMALL_EN = 2,
+	// WHISPER_MODEL_MEDIUM_EN = 3,
+	// WHISPER_MODEL_LARGE_V3_TURBO = 4,
+	WHISPER_MODEL_COUNT = 2
 };
 
 static const char* WHISPER_MODEL_PATHS[WHISPER_MODEL_COUNT] = {
 	"models/ggml-tiny.en.bin",
 	"models/ggml-base.en.bin",
-	"models/ggml-small.en.bin",
-	"models/ggml-medium.en.bin",
-	"models/ggml-large-v3-turbo.bin"
+	// "models/ggml-small.en.bin",
+	// "models/ggml-medium.en.bin",
+	// "models/ggml-large-v3-turbo.bin"
 };
 
 struct WhisperModelState

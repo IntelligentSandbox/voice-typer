@@ -18,10 +18,11 @@ int main(int argc, char *argv[])
 	AppState.QtApp = &QtApp;
 	AppState.QtMainWindow = &QtMainWindow;
 
-	AppState.IsRecording = false;
-	AppState.IsStreaming = false;
+	AppState.IsRecording   = false;
+	AppState.IsStreaming   = false;
 	AppState.CaptureRunning = false;
 	AppState.FocusedWindow = nullptr;
+	AppState.SettingsButton = nullptr;
 
 	init_whisper_state(&AppState.WhisperState);
 
@@ -29,6 +30,7 @@ int main(int argc, char *argv[])
 	query_inference_devices(&AppState);
 	query_available_stt_models(&AppState);
 	query_whisper_thread_count(&AppState);
+	query_hotkey_settings(&AppState);
 
 	start_hotkey_listener(&AppState);
 

@@ -8,10 +8,11 @@ custom user commands via keywords/keyphrases.
 ## Disclaimers:
 AI is used to write code in this project with human review done at our discretion.
 We try our best to make something that is fast, usable, fully offline with minimal dependencies.
-Let the results and code quality speak for themselves...
+Let the results and code quality speak for themselves...the sloppening...
 AI Coding programs used include but are not limited to:
 - [opencode](https://github.com/anomalyco/opencode)
     - An open source AI coding agent that we have tried experimenting with to aid development in this project.
+- [claude code](https://code.claude.com/docs/en/overview)
 
 ## Dependencies
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp)

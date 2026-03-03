@@ -12,6 +12,8 @@
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "propsys.lib")
 
+#include "qt.h"
+
 #define MAX_AUDIO_DEVICE_NAME_LENGTH 512
 
 struct AudioInputDeviceInfo
@@ -29,11 +31,11 @@ struct AudioCaptureDevice
 	bool IsCapturing;
 };
 
-#define AUDIO_CAPTURE_SAMPLE_RATE    16000
-#define AUDIO_CAPTURE_CHANNELS       1
-#define AUDIO_CAPTURE_BITS_PER_SAMPLE 16
-#define AUDIO_CAPTURE_BUFFER_MS      100
-#define AUDIO_CAPTURE_BUFFER_COUNT   8
+#define AUDIO_CAPTURE_SAMPLE_RATE       16000
+#define AUDIO_CAPTURE_CHANNELS          1
+#define AUDIO_CAPTURE_BITS_PER_SAMPLE   16
+#define AUDIO_CAPTURE_BUFFER_MS         100
+#define AUDIO_CAPTURE_BUFFER_COUNT      8
 
 inline
 std::vector<AudioInputDeviceInfo>
@@ -66,7 +68,7 @@ query_audio_input_devices_native()
 		for (UINT i = 0; i < NumDevices && i < deviceCount; i++)
 		{
 			Result = waveInGetDevCapsW(i, (LPWAVEINCAPSW)&Caps, sizeof(Caps));
-			if (Result != MMSYSERR_NOERROR) continue;
+			if (Result != MMSYSERR_NOERROR) continue; // TODO(warren): Could have better error handling.
 
             AudioInputDeviceInfo Info;
             Info.Index = i;
@@ -121,7 +123,7 @@ query_audio_input_devices_native()
 		for (UINT i = 0; i < NumDevices; i++)
 		{
 			Result = waveInGetDevCapsW(i, (LPWAVEINCAPSW)&Caps, sizeof(Caps));
-			if (Result != MMSYSERR_NOERROR) continue;
+			if (Result != MMSYSERR_NOERROR) continue; // TODO(warren): Could have better error handling.
 
             AudioInputDeviceInfo Info;
             Info.Index = i;
@@ -213,4 +215,97 @@ audio_device_get_index(AudioInputDeviceInfo *Info)
 		return Info->Index;
 	}
 	return -1;
+}
+
+// ---- Settings persistence (JSON via Qt) ----
+// Data is stored in <exe_dir>/data/settings.json
+
+inline
+QString
+get_settings_file_path()
+{
+	wchar_t ExePath[MAX_PATH] = {};
+	GetModuleFileNameW(nullptr, ExePath, MAX_PATH);
+	QString ExeDir = QFileInfo(QString::fromWCharArray(ExePath)).absolutePath();
+	return ExeDir + "/data/settings.json";
+}
+
+// Reads the whole JSON root object from disk, or returns an empty object.
+inline
+QJsonObject
+read_settings_root()
+{
+	QFile File(get_settings_file_path());
+	if (!File.open(QIODevice::ReadOnly)) return QJsonObject();
+	QJsonDocument Doc = QJsonDocument::fromJson(File.readAll());
+	File.close();
+	if (Doc.isNull() || !Doc.isObject()) return QJsonObject();
+	return Doc.object();
+}
+
+// Writes a root object back to disk, creating data/ if needed.
+inline
+bool
+write_settings_root(const QJsonObject &Root)
+{
+	QString FilePath = get_settings_file_path();
+	QDir().mkpath(QFileInfo(FilePath).absolutePath());
+
+	QFile File(FilePath);
+	if (!File.open(QIODevice::WriteOnly | QIODevice::Truncate))
+	{
+		#ifdef DEBUG
+			printf("[platform] ERROR: could not write settings file: %s\n",
+				FilePath.toUtf8().constData());
+		#endif
+		return false;
+	}
+	File.write(QJsonDocument(Root).toJson(QJsonDocument::Indented));
+	File.close();
+	return true;
+}
+
+// Saves a single named hotkey (e.g. "record_hotkey") into the JSON file,
+// preserving all other existing keys.
+inline
+bool
+save_hotkey_setting(const char *JsonKey, int Modifiers, int Key)
+{
+	QJsonObject Root = read_settings_root();
+
+	QJsonObject Obj;
+	Obj["modifiers"] = Modifiers;
+	Obj["key"]       = Key;
+	Root[JsonKey]    = Obj;
+
+	bool Ok = write_settings_root(Root);
+
+	#ifdef DEBUG
+		if (Ok)
+			printf("[platform] Saved %s: modifiers=%d key=%d\n", JsonKey, Modifiers, Key);
+	#endif
+
+	return Ok;
+}
+
+// Loads a single named hotkey from the JSON file into OutModifiers / OutKey.
+// Returns false if the file or key is missing; caller should keep the default.
+inline
+bool
+load_hotkey_setting(const char *JsonKey, int *OutModifiers, int *OutKey)
+{
+	QJsonObject Root = read_settings_root();
+	if (!Root.contains(JsonKey)) return false;
+
+	QJsonObject Obj = Root[JsonKey].toObject();
+	if (!Obj.contains("modifiers") || !Obj.contains("key")) return false;
+
+	*OutModifiers = Obj["modifiers"].toInt();
+	*OutKey       = Obj["key"].toInt();
+
+	#ifdef DEBUG
+		printf("[platform] Loaded %s: modifiers=%d key=%d\n", JsonKey, *OutModifiers, *OutKey);
+	#endif
+
+	return true;
 }
