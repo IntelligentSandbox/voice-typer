@@ -158,6 +158,8 @@ inline
 void
 open_settings_window(GlobalState *AppState)
 {
+	AppState->IsSettingsDialogOpen = true;
+
 	QDialog *Dialog = new QDialog(AppState->QtMainWindow);
 	Dialog->setWindowTitle("Settings");
 	Dialog->setModal(true);
@@ -275,6 +277,7 @@ open_settings_window(GlobalState *AppState)
 	});
 
 	Dialog->exec();
+	AppState->IsSettingsDialogOpen = false;
 	Dialog->deleteLater();
 }
 

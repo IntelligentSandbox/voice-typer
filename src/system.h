@@ -115,6 +115,13 @@ hotkey_thread_func(GlobalState *AppState)
 	while (HotkeyThreadRunning)
 	{
 		#ifdef _WIN32
+			// Skip all hotkey checks if the settings dialog is open (remapping mode)
+			if (AppState->IsSettingsDialogOpen)
+			{
+				Sleep(10);
+				continue;
+			}
+
 			bool RecordKeyIsDown    = is_hotkey_down(AppState->RecordHotkey);
 			bool StreamKeyIsDown    = is_hotkey_down(AppState->StreamHotkey);
 			bool LoadModelKeyIsDown = is_hotkey_down(AppState->LoadModelHotkey);
