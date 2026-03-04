@@ -22,3 +22,4 @@
 #include <QFileInfo>
 #include <QFile>
 #include <QMessageBox>
+#include <QCheckBox>

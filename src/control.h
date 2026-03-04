@@ -125,6 +125,8 @@ toggle_recording(GlobalState *AppState)
 			#endif
 			return;
 		}
+		if (AppState->PlayRecordSound) play_start_recording_sound();
+
 		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_RED);
 		AppState->RecordButton->setText(QString("Stop (%1)").arg(AppState->RecordHotkey.to_label()));
 		AppState->StreamButton->setEnabled(false);
@@ -134,6 +136,7 @@ toggle_recording(GlobalState *AppState)
 	{
 		// Non-blocking: signal capture to stop. The pipeline thread will
 		// finish transcription in the background and restore both buttons.
+		if (AppState->PlayRecordSound) play_stop_recording_sound();
 		signal_record_stop(AppState);
 		AppState->RecordButton->setEnabled(false);
 		AppState->RecordButton->setStyleSheet(BUTTON_STYLE_GREY);
@@ -201,44 +204,6 @@ toggle_streaming(GlobalState *AppState)
 
 	#ifdef DEBUG
 		qDebug() << "Streaming toggled to:" << AppState->IsStreaming;
-	#endif
-}
-
-// Saves and applies a hotkey update for a single action.
-// JsonKey   : JSON field name (e.g. "record_hotkey")
-// Target    : pointer to the HotkeyConfig in GlobalState to overwrite
-// NewHotkey : the new value to store
-// After saving, RefreshLabels() is called so every button label stays current.
-inline
-void
-apply_hotkey(GlobalState *AppState,
-             const char  *JsonKey,
-             HotkeyConfig *Target,
-             HotkeyConfig  NewHotkey)
-{
-	*Target = NewHotkey;
-
-	save_hotkey_setting(JsonKey, (int)NewHotkey.Modifiers, (int)NewHotkey.Key);
-
-	// Refresh all three button labels — hotkeys can change any of them
-	AppState->RecordButton->setText(record_button_idle_label(AppState));
-	AppState->StreamButton->setText(stream_button_idle_label(AppState));
-
-	// LoadModelButton label depends on whether a model is currently loaded
-	if (!is_whisper_model_loaded(&AppState->WhisperState))
-	{
-		AppState->LoadModelButton->setText(load_model_button_idle_label(AppState));
-	}
-	else
-	{
-		AppState->LoadModelButton->setText(
-			QString("Unload STT Model (%1)").arg(AppState->LoadModelHotkey.to_label())
-		);
-	}
-
-	#ifdef DEBUG
-		printf("[control] Hotkey '%s' updated to: %s\n",
-			JsonKey, NewHotkey.to_label().toUtf8().constData());
 	#endif
 }
 

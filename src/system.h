@@ -253,10 +253,17 @@ query_hotkey_settings(GlobalState *AppState)
 		AppState->LoadModelHotkey.Key       = Qt::Key(Key);
 	}
 
+	bool SoundEnabled = false;
+	if (load_bool_setting("play_record_sound", &SoundEnabled))
+	{
+		AppState->PlayRecordSound = SoundEnabled;
+	}
+
 	#ifdef DEBUG
 		printf("[system] Record hotkey:     %s\n", AppState->RecordHotkey.to_label().toUtf8().constData());
 		printf("[system] Stream hotkey:     %s\n", AppState->StreamHotkey.to_label().toUtf8().constData());
 		printf("[system] Load model hotkey: %s\n", AppState->LoadModelHotkey.to_label().toUtf8().constData());
+		printf("[system] Play record sound: %s\n", AppState->PlayRecordSound ? "true" : "false");
 	#endif
 }
 

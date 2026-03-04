@@ -309,3 +309,52 @@ load_hotkey_setting(const char *JsonKey, int *OutModifiers, int *OutKey)
 
 	return true;
 }
+
+// Saves a boolean setting (e.g., "play_record_sound") to the JSON file.
+inline
+bool
+save_bool_setting(const char *JsonKey, bool Value)
+{
+	QJsonObject Root = read_settings_root();
+	Root[JsonKey] = Value;
+	bool Ok = write_settings_root(Root);
+
+	#ifdef DEBUG
+		if (Ok)
+			printf("[platform] Saved %s: %s\n", JsonKey, Value ? "true" : "false");
+	#endif
+
+	return Ok;
+}
+
+// Loads a boolean setting from the JSON file.
+// Returns false if the file or key is missing; caller should keep the default.
+inline
+bool
+load_bool_setting(const char *JsonKey, bool *OutValue)
+{
+	QJsonObject Root = read_settings_root();
+	if (!Root.contains(JsonKey)) return false;
+
+	*OutValue = Root[JsonKey].toBool();
+
+	#ifdef DEBUG
+		printf("[platform] Loaded %s: %s\n", JsonKey, *OutValue ? "true" : "false");
+	#endif
+
+	return true;
+}
+
+inline
+void
+play_start_recording_sound()
+{
+    Beep(1000, 200);
+}
+
+inline
+void
+play_stop_recording_sound()
+{
+    Beep(800, 200);
+}

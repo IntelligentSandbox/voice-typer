@@ -24,6 +24,7 @@ int main(int argc, char *argv[])
 	AppState.FocusedWindow = nullptr;
 	AppState.SettingsButton = nullptr;
 	AppState.IsSettingsDialogOpen = false;
+	AppState.PlayRecordSound = false;
 
 	init_whisper_state(&AppState.WhisperState);
 

@@ -10,7 +10,7 @@ use tab chars for indentation
 use lf line endings
 follow the existing coding guidelines
 do not remove code comments unless explicitly directed to
-ensure changes pass both release and debug builds by using `build.bat` and `build.bat debug`
+ensure changes pass BOTH release and debug builds by using `build.bat` and `build.bat debug`
 use early returns in logical flow where possible, helps to reduce code indentation
 try not to have long lines (more than 120 chars), unroll onto newlines if needed
 do not insert comments unless explicitly directed to

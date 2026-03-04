@@ -58,7 +58,7 @@ struct HotkeyEventFilter : QObject
 
 		if (Event->type() == QEvent::FocusIn)
 		{
-			Edit->setStyleSheet("border: 2px solid #2196F3; background: #e8f4fd;");
+			Edit->setStyleSheet("border: 2px solid #0d47a1; background: #1565c0; color: black;");
 			return false;
 		}
 
@@ -119,15 +119,22 @@ struct SettingsWindowState
 	// Capture box state
 	HotkeyCaptureState Capture;
 
+	// Temporary hotkey configs (committed on Save)
+	HotkeyConfig TempHotkeys[3];
+
+	// Temporary sound setting (committed on Save)
+	bool TempPlayRecordSound;
+
 	// Pointers back into the dialog so callbacks can refresh UI
 	QLabel     *CurrentLabel;
 	QLineEdit  *CaptureEdit;
 	QPushButton *ActionButtons[3];
+	QCheckBox  *SoundCheckBox;
 };
 
 inline
 void
-settings_select_action(GlobalState *AppState, SettingsWindowState *S, int Action)
+settings_select_action(SettingsWindowState *S, int Action)
 {
 	S->SelectedAction = Action;
 
@@ -139,16 +146,10 @@ settings_select_action(GlobalState *AppState, SettingsWindowState *S, int Action
 	}
 
 	// Show the current hotkey for the selected action in the capture box
-	HotkeyConfig *Configs[3] = {
-		&AppState->RecordHotkey,
-		&AppState->StreamHotkey,
-		&AppState->LoadModelHotkey
-	};
-
-	HotkeyConfig Current = *Configs[Action];
+	HotkeyConfig Current = S->TempHotkeys[Action];
 	S->CurrentLabel->setText(QString("Current: %1").arg(Current.to_label()));
 
-	// Reset capture box to the existing hotkey for this action
+	// Reset capture box to the temp hotkey for this action
 	S->Capture.Captured   = Current;
 	S->Capture.HasCapture = Current.is_valid();
 	S->CaptureEdit->setText(Current.to_label());
@@ -163,10 +164,14 @@ open_settings_window(GlobalState *AppState)
 	QDialog *Dialog = new QDialog(AppState->QtMainWindow);
 	Dialog->setWindowTitle("Settings");
 	Dialog->setModal(true);
-	Dialog->resize(500, 280);
+	Dialog->resize(500, 320);
 
 	QGridLayout *Layout = new QGridLayout(Dialog);
 	int Row = 0;
+
+	// Sound checkbox
+	QCheckBox *SoundCheckBox = new QCheckBox("Play sound when starting/stopping recording", Dialog);
+	Layout->addWidget(SoundCheckBox, Row++, 0, 1, 3);
 
 	// Heading
 	QLabel *Heading = new QLabel("Keyboard Shortcuts", Dialog);
@@ -192,17 +197,26 @@ open_settings_window(GlobalState *AppState)
 	QLabel *CurrentLabel = new QLabel("", Dialog);
 	Layout->addWidget(CurrentLabel, Row++, 0, 1, 3);
 
-	// Shared state declared here so the capture edit writes directly into S.Capture
+	// Shared state - initialize temp values from AppState
 	SettingsWindowState S = {};
 	S.SelectedAction   = 0;
 	S.CurrentLabel     = CurrentLabel;
 	S.ActionButtons[0] = RecordBtn;
 	S.ActionButtons[1] = StreamBtn;
 	S.ActionButtons[2] = LoadModelBtn;
+	S.SoundCheckBox    = SoundCheckBox;
+
+	// Copy current hotkeys to temp storage
+	S.TempHotkeys[0] = AppState->RecordHotkey;
+	S.TempHotkeys[1] = AppState->StreamHotkey;
+	S.TempHotkeys[2] = AppState->LoadModelHotkey;
+	S.TempPlayRecordSound = AppState->PlayRecordSound;
+
+	SoundCheckBox->setChecked(S.TempPlayRecordSound);
 
 	// Hotkey capture box — filter writes into S.Capture
 	QLineEdit *CaptureEdit = nullptr;
-	make_hotkey_capture_edit(Dialog, &S.Capture, &CaptureEdit, AppState->RecordHotkey);
+	make_hotkey_capture_edit(Dialog, &S.Capture, &CaptureEdit, S.TempHotkeys[0]);
 	CaptureEdit->setMinimumHeight(40);
 	Layout->addWidget(CaptureEdit, Row++, 0, 1, 3);
 	S.CaptureEdit = CaptureEdit;
@@ -219,61 +233,76 @@ open_settings_window(GlobalState *AppState)
 	HintLabel->setFont(HintFont);
 	Layout->addWidget(HintLabel, Row++, 0, 1, 3);
 
-	// Set Hotkey / Close buttons
+	// Set Hotkey / Save / Cancel buttons
 	QPushButton *SetButton   = new QPushButton("Set Hotkey", Dialog);
-	QPushButton *CloseButton = new QPushButton("Close",      Dialog);
+	QPushButton *SaveButton   = new QPushButton("Save",       Dialog);
+	QPushButton *CancelButton = new QPushButton("Cancel",     Dialog);
 	SetButton->setMinimumHeight(40);
-	CloseButton->setMinimumHeight(40);
-	Layout->addWidget(SetButton,   Row, 0, 1, 2);
-	Layout->addWidget(CloseButton, Row, 2);
+	SaveButton->setMinimumHeight(40);
+	CancelButton->setMinimumHeight(40);
+	Layout->addWidget(SetButton,   Row, 0);
+	Layout->addWidget(SaveButton,   Row, 1);
+	Layout->addWidget(CancelButton, Row, 2);
 
 	// Select Record by default to prime the UI
-	settings_select_action(AppState, &S, 0);
+	settings_select_action(&S, 0);
 
 	// Action selector connections — each button selects its action
-	QObject::connect(RecordBtn, &QPushButton::clicked, [AppState, &S]()
+	QObject::connect(RecordBtn, &QPushButton::clicked, [&S]()
 	{
-		settings_select_action(AppState, &S, 0);
+		settings_select_action(&S, 0);
 	});
-	QObject::connect(StreamBtn, &QPushButton::clicked, [AppState, &S]()
+	QObject::connect(StreamBtn, &QPushButton::clicked, [&S]()
 	{
-		settings_select_action(AppState, &S, 1);
+		settings_select_action(&S, 1);
 	});
-	QObject::connect(LoadModelBtn, &QPushButton::clicked, [AppState, &S]()
+	QObject::connect(LoadModelBtn, &QPushButton::clicked, [&S]()
 	{
-		settings_select_action(AppState, &S, 2);
+		settings_select_action(&S, 2);
 	});
 
-	// Set Hotkey — saves for the currently selected action
+    // TODO(warren): not quite right.
+    // click capture edit button -> in temp storage -> hit set hotkey -> save btn -> save to disk and sync to appstate.
+    // click capture edit button -> in temp storage -> save btn -> dont save the hotkey in the temp buffer, revert the temp buffer with the one on disk.
+	// Set Hotkey — updates temp storage only
 	QObject::connect(SetButton, &QPushButton::clicked, [AppState, Dialog, &S]()
 	{
 		if (!S.Capture.HasCapture)
 		{
 			QMessageBox::warning(Dialog, "No Hotkey Set",
-				"Please press a key combination in the box before saving.");
+				"Please press a key combination in the box before clicking Set.");
 			return;
 		}
 
-		const char *JsonKeys[3]  = { "record_hotkey", "stream_hotkey", "load_model_hotkey" };
-		HotkeyConfig *Targets[3] = {
-			&AppState->RecordHotkey,
-			&AppState->StreamHotkey,
-			&AppState->LoadModelHotkey
-		};
+		// Store in temp hotkey for the selected action
+		S.TempHotkeys[S.SelectedAction] = S.Capture.Captured;
 
-		apply_hotkey(AppState,
-		             JsonKeys[S.SelectedAction],
-		             Targets[S.SelectedAction],
-		             S.Capture.Captured);
-
-		// Refresh the "Current:" label to the newly saved value
+		// Refresh the "Current:" label
 		S.CurrentLabel->setText(
 			QString("Current: %1").arg(S.Capture.Captured.to_label()));
 	});
 
-	QObject::connect(CloseButton, &QPushButton::clicked, [Dialog]()
+	QObject::connect(SaveButton, &QPushButton::clicked, [AppState, Dialog, &S]()
 	{
-		Dialog->accept();
+		AppState->RecordHotkey    = S.TempHotkeys[0];
+		AppState->StreamHotkey    = S.TempHotkeys[1];
+		AppState->LoadModelHotkey = S.TempHotkeys[2];
+
+		save_hotkey_setting("record_hotkey",    (int)AppState->RecordHotkey.Modifiers,    (int)AppState->RecordHotkey.Key);
+		save_hotkey_setting("stream_hotkey",    (int)AppState->StreamHotkey.Modifiers,    (int)AppState->StreamHotkey.Key);
+		save_hotkey_setting("load_model_hotkey", (int)AppState->LoadModelHotkey.Modifiers, (int)AppState->LoadModelHotkey.Key);
+
+		AppState->PlayRecordSound = S.SoundCheckBox->isChecked();
+		save_bool_setting("play_record_sound", AppState->PlayRecordSound);
+
+		AppState->RecordButton->setText(record_button_idle_label(AppState));
+		AppState->StreamButton->setText(stream_button_idle_label(AppState));
+		AppState->LoadModelButton->setText(load_model_button_idle_label(AppState));
+	});
+
+	QObject::connect(CancelButton, &QPushButton::clicked, [Dialog]()
+	{
+		Dialog->reject();
 	});
 
 	Dialog->exec();
