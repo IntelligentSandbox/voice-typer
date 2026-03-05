@@ -162,28 +162,89 @@ inject_text_to_window(HWND TargetWindow, const char *Utf8Text)
 	std::wstring Wide(WideLen - 1, L'\0');
 	MultiByteToWideChar(CP_UTF8, 0, Utf8Text, -1, &Wide[0], WideLen);
 
-	std::vector<INPUT> Inputs;
-	Inputs.reserve(Wide.size() * 2);
+	if (!OpenClipboard(nullptr)) return;
 
-	for (wchar_t Wc : Wide)
+	HGLOBAL hOld = nullptr;
+	HANDLE hClip = GetClipboardData(CF_UNICODETEXT);
+	if (hClip)
 	{
-		INPUT KeyDown = {};
-		KeyDown.type           = INPUT_KEYBOARD;
-		KeyDown.ki.wVk         = 0;
-		KeyDown.ki.wScan       = Wc;
-		KeyDown.ki.dwFlags     = KEYEVENTF_UNICODE;
-		KeyDown.ki.time        = 0;
-		KeyDown.ki.dwExtraInfo = 0;
-
-		INPUT KeyUp = KeyDown;
-		KeyUp.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-
-		Inputs.push_back(KeyDown);
-		Inputs.push_back(KeyUp);
+		SIZE_T OldSize = GlobalSize(hClip);
+		if (OldSize > 0)
+		{
+			void *pOldData = GlobalLock(hClip);
+			if (pOldData)
+			{
+				hOld = GlobalAlloc(GMEM_MOVEABLE, OldSize);
+				if (hOld)
+				{
+					void *pCopy = GlobalLock(hOld);
+					if (pCopy)
+					{
+						memcpy(pCopy, pOldData, OldSize);
+						GlobalUnlock(hOld);
+					}
+					else
+					{
+						GlobalFree(hOld);
+						hOld = nullptr;
+					}
+				}
+				GlobalUnlock(hClip);
+			}
+		}
 	}
 
+	size_t ByteSize = (Wide.size() + 1) * sizeof(wchar_t);
+	HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, ByteSize);
+	if (!hMem)
+	{
+		CloseClipboard();
+		if (hOld) GlobalFree(hOld);
+		return;
+	}
+
+	wchar_t *pMem = static_cast<wchar_t*>(GlobalLock(hMem));
+	if (!pMem)
+	{
+		GlobalFree(hMem);
+		CloseClipboard();
+		if (hOld) GlobalFree(hOld);
+		return;
+	}
+	memcpy(pMem, Wide.c_str(), ByteSize);
+	GlobalUnlock(hMem);
+
+	EmptyClipboard();
+	SetClipboardData(CF_UNICODETEXT, hMem);
+	CloseClipboard();
+
 	SetForegroundWindow(TargetWindow);
-	SendInput((UINT)Inputs.size(), Inputs.data(), sizeof(INPUT));
+	Sleep(50);
+
+	DWORD TargetThreadId = GetWindowThreadProcessId(TargetWindow, nullptr);
+	DWORD OurThreadId    = GetCurrentThreadId();
+
+	HWND FocusedChild = TargetWindow;
+	if (TargetThreadId != OurThreadId)
+	{
+		if (AttachThreadInput(OurThreadId, TargetThreadId, TRUE))
+		{
+			HWND hFocus = GetFocus();
+			if (hFocus) FocusedChild = hFocus;
+			AttachThreadInput(OurThreadId, TargetThreadId, FALSE);
+		}
+	}
+
+	SendMessage(FocusedChild, WM_PASTE, 0, 0);
+
+	if (!OpenClipboard(nullptr))
+	{
+		if (hOld) GlobalFree(hOld);
+		return;
+	}
+	EmptyClipboard();
+	if (hOld) SetClipboardData(CF_UNICODETEXT, hOld);
+	CloseClipboard();
 }
 
 inline
