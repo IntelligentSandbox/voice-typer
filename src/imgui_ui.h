@@ -1192,17 +1192,17 @@ render_transcribed_text_box(GlobalState *AppState)
 	if (ImGui::BeginChild("##TranscribedTextConfidence", ImVec2(-1.0f, BoxHeight), ImGuiChildFlags_Borders))
 	{
 		float WrapRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+		float LineEndX = ImGui::GetCursorPosX();
 		bool LineStarted = false;
 		for (const TranscribedWord &Word : Ui->TranscribedTextBoxWords)
 		{
-			if (LineStarted)
-			{
-				float NextX = ImGui::GetCursorPosX() + ImGui::CalcTextSize(Word.Text.c_str()).x;
-				if (NextX <= WrapRight) ImGui::SameLine(0.0f, 0.0f);
-			}
+			float WordW = ImGui::CalcTextSize(Word.Text.c_str()).x;
+			if (LineStarted && LineEndX + WordW <= WrapRight) ImGui::SameLine(0.0f, 0.0f);
+			else LineEndX = ImGui::GetCursorPosX();
 			ImGui::PushStyleColor(ImGuiCol_Text, transcribed_word_confidence_color(Word.Confidence));
 			ImGui::TextUnformatted(Word.Text.c_str());
 			ImGui::PopStyleColor();
+			LineEndX += WordW;
 			LineStarted = true;
 		}
 	}
