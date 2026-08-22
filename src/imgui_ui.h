@@ -1185,18 +1185,25 @@ render_transcribed_text_box(GlobalState *AppState)
 			Ui->TranscribedTextBoxBuffer.data(),
 			Ui->TranscribedTextBoxBuffer.size(),
 			ImVec2(-1.0f, BoxHeight),
-			ImGuiInputTextFlags_ReadOnly);
+			ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_WordWrap);
 		return;
 	}
 
 	if (ImGui::BeginChild("##TranscribedTextConfidence", ImVec2(-1.0f, BoxHeight), ImGuiChildFlags_Borders))
 	{
+		float WrapRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+		bool LineStarted = false;
 		for (const TranscribedWord &Word : Ui->TranscribedTextBoxWords)
 		{
+			if (LineStarted)
+			{
+				float NextX = ImGui::GetCursorPosX() + ImGui::CalcTextSize(Word.Text.c_str()).x;
+				if (NextX <= WrapRight) ImGui::SameLine(0.0f, 0.0f);
+			}
 			ImGui::PushStyleColor(ImGuiCol_Text, transcribed_word_confidence_color(Word.Confidence));
 			ImGui::TextUnformatted(Word.Text.c_str());
 			ImGui::PopStyleColor();
-			ImGui::SameLine(0.0f, 0.0f);
+			LineStarted = true;
 		}
 	}
 	ImGui::EndChild();
