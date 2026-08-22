@@ -1253,7 +1253,8 @@ render_download_modal(GlobalState *AppState)
 	}
 	const float ModelColW = LongestNameW + 50.0f;
 	const float SizeColW = 80.0f;
-	const float ActionColW = 130.0f;
+	const float ActionColW = ImGui::CalcTextSize("Re-download").x + ImGui::GetStyle().FramePadding.x * 6.0f +
+		ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
 
 	ImVec2 Display = ImGui::GetIO().DisplaySize;
 	const ImGuiStyle &Style = ImGui::GetStyle();
@@ -1305,25 +1306,49 @@ render_download_modal(GlobalState *AppState)
 					ImGui::TextDisabled("%s", format_bytes(M.SizeBytes).c_str());
 					ImGui::TableSetColumnIndex(2);
 
-					std::string Filename = catalog_model_filename(M.Name);
-					bool Installed = model_filename_installed(AppState, Filename);
-					std::string Label = Installed ? "Re-download" : "Download";
-					Label += "##cat-";
-					Label += M.Name;
-					if (ImGui::Button(Label.c_str(), ImVec2(-1.0f, 0.0f)))
+				std::string Filename = catalog_model_filename(M.Name);
+				bool Installed = model_filename_installed(AppState, Filename);
+				std::string Label = Installed ? "Re-download" : "Download";
+				Label += "##cat-";
+				Label += M.Name;
+				float AvailX = ImGui::GetContentRegionAvail().x;
+				float DeleteW = Installed ? ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x : 0.0f;
+				if (ImGui::Button(Label.c_str(), ImVec2(AvailX - DeleteW, 0.0f)))
+				{
+					D->PendingModelName = M.Name;
+					D->PendingUrl = catalog_model_url(M.Name);
+					std::string SttDir = platform_join_path(platform_get_exe_dir(), "stt_models");
+					D->PendingDestPath = platform_join_path(SttDir, Filename);
+					D->PendingSize = M.SizeBytes;
+					if (Installed) D->WantsOverwriteConfirm = true;
+					else
 					{
-						D->PendingModelName = M.Name;
-						D->PendingUrl = catalog_model_url(M.Name);
+						platform_ensure_directory(platform_join_path(platform_get_exe_dir(), "stt_models"));
+						start_model_download(AppState, M.Name, D->PendingUrl, D->PendingDestPath, M.SizeBytes);
+					}
+				}
+
+				if (Installed)
+				{
+					ImGui::SameLine();
+					std::string DeleteLabel = std::string("X##del-cat-") + M.Name;
+					if (colored_button(DeleteLabel.c_str(), ImVec2(ImGui::GetFrameHeight(), 0.0f), BUTTON_COLOR_RED))
+					{
 						std::string SttDir = platform_join_path(platform_get_exe_dir(), "stt_models");
-						D->PendingDestPath = platform_join_path(SttDir, Filename);
-						D->PendingSize = M.SizeBytes;
-						if (Installed) D->WantsOverwriteConfirm = true;
+						std::string Path = platform_join_path(SttDir, Filename);
+						if (remove(Path.c_str()) == 0)
+						{
+							query_available_stt_models(AppState);
+							std::string Msg = std::string("Deleted ") + M.Name;
+							show_success_toast(AppState, Msg.c_str());
+						}
 						else
 						{
-							platform_ensure_directory(platform_join_path(platform_get_exe_dir(), "stt_models"));
-							start_model_download(AppState, M.Name, D->PendingUrl, D->PendingDestPath, M.SizeBytes);
+							std::string Msg = std::string("Failed to delete ") + M.Name;
+							show_toast(AppState, Msg.c_str());
 						}
 					}
+				}
 				}
 				ImGui::EndTable();
 			}
@@ -1346,22 +1371,42 @@ render_download_modal(GlobalState *AppState)
 				ImGui::TextDisabled("%s", format_bytes(VAD_MODEL_SIZE_BYTES).c_str());
 				ImGui::TableSetColumnIndex(2);
 
-				bool VadInstalled = vad_model_installed(AppState);
-				std::string VadLabel = VadInstalled ? "Re-download##vad" : "Download##vad";
-				if (ImGui::Button(VadLabel.c_str(), ImVec2(-1.0f, 0.0f)))
+			bool VadInstalled = vad_model_installed(AppState);
+			std::string VadLabel = VadInstalled ? "Re-download##vad" : "Download##vad";
+			float AvailX = ImGui::GetContentRegionAvail().x;
+			float DeleteW = VadInstalled ? ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x : 0.0f;
+			if (ImGui::Button(VadLabel.c_str(), ImVec2(AvailX - DeleteW, 0.0f)))
+			{
+				D->PendingModelName = VAD_MODEL_DISPLAY_NAME;
+				D->PendingUrl = vad_model_url();
+				std::string VadDir = platform_join_path(platform_get_exe_dir(), "vad_models");
+				D->PendingDestPath = platform_join_path(VadDir, VAD_MODEL_FILENAME);
+				D->PendingSize = VAD_MODEL_SIZE_BYTES;
+				if (VadInstalled) D->WantsOverwriteConfirm = true;
+				else
 				{
-					D->PendingModelName = VAD_MODEL_DISPLAY_NAME;
-					D->PendingUrl = vad_model_url();
-					std::string VadDir = platform_join_path(platform_get_exe_dir(), "vad_models");
-					D->PendingDestPath = platform_join_path(VadDir, VAD_MODEL_FILENAME);
-					D->PendingSize = VAD_MODEL_SIZE_BYTES;
-					if (VadInstalled) D->WantsOverwriteConfirm = true;
+					platform_ensure_directory(VadDir);
+					start_model_download(AppState, VAD_MODEL_DISPLAY_NAME, D->PendingUrl, D->PendingDestPath, VAD_MODEL_SIZE_BYTES);
+				}
+			}
+
+			if (VadInstalled)
+			{
+				ImGui::SameLine();
+				if (colored_button("X##del-vad", ImVec2(ImGui::GetFrameHeight(), 0.0f), BUTTON_COLOR_RED))
+				{
+					if (remove(AppState->VadModelPath.c_str()) == 0)
+					{
+						std::string Msg = std::string("Deleted ") + VAD_MODEL_DISPLAY_NAME;
+						show_success_toast(AppState, Msg.c_str());
+					}
 					else
 					{
-						platform_ensure_directory(VadDir);
-						start_model_download(AppState, VAD_MODEL_DISPLAY_NAME, D->PendingUrl, D->PendingDestPath, VAD_MODEL_SIZE_BYTES);
+						std::string Msg = std::string("Failed to delete ") + VAD_MODEL_DISPLAY_NAME;
+						show_toast(AppState, Msg.c_str());
 					}
 				}
+			}
 				ImGui::EndTable();
 			}
 		}
