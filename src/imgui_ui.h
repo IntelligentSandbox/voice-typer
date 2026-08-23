@@ -1171,14 +1171,16 @@ transcribed_text_hit_test(const std::vector<ImVec4> &WordRects, const ImVec2 &Po
 	if (Pos.y < WordRects[0].y) return 0;
 	if (Pos.y >= WordRects[Count - 1].y) return Count - 1;
 
-	int LineBegin = 0;
+	int LinePivot = 0;
 	for (int i = 0; i < Count; i++)
 	{
-		if (WordRects[i].y <= Pos.y) LineBegin = i;
+		if (WordRects[i].y <= Pos.y) LinePivot = i;
 	}
-	while (LineBegin > 0 && WordRects[LineBegin - 1].y == WordRects[LineBegin].y) LineBegin--;
-	int LineEnd = LineBegin;
-	while (LineEnd + 1 < Count && WordRects[LineEnd + 1].y == WordRects[LineBegin].y) LineEnd++;
+	const float LineY = WordRects[LinePivot].y;
+	int LineBegin = LinePivot;
+	while (LineBegin > 0 && ImFabs(WordRects[LineBegin - 1].y - LineY) < 0.5f) LineBegin--;
+	int LineEnd = LinePivot;
+	while (LineEnd + 1 < Count && ImFabs(WordRects[LineEnd + 1].y - LineY) < 0.5f) LineEnd++;
 
 	if (Pos.x <= WordRects[LineBegin].x) return LineBegin;
 	for (int i = LineBegin; i <= LineEnd; i++)
@@ -1243,9 +1245,10 @@ render_transcribed_text_box(GlobalState *AppState)
 		{
 			Ui->TranscribedTextBoxSerial = Ui->TranscribedTextSerial;
 			Ui->TranscribedTextBoxWords = Ui->TranscribedTextWords;
-			Ui->TranscribedTextSelectAnchor = -1;
-			Ui->TranscribedTextSelectFocus = -1;
-			Ui->TranscribedTextSelecting = false;
+			if (Ui->TranscribedTextSelectAnchor >= (int)Ui->TranscribedTextBoxWords.size())
+				Ui->TranscribedTextSelectAnchor = (int)Ui->TranscribedTextBoxWords.size() - 1;
+			if (Ui->TranscribedTextSelectFocus >= (int)Ui->TranscribedTextBoxWords.size())
+				Ui->TranscribedTextSelectFocus = (int)Ui->TranscribedTextBoxWords.size() - 1;
 
 			Ui->TranscribedTextBoxBuffer.clear();
 			for (const TranscribedWord &Word : Ui->TranscribedTextBoxWords)
@@ -1280,6 +1283,17 @@ render_transcribed_text_box(GlobalState *AppState)
 
 	if (ImGui::BeginChild("##TranscribedTextConfidence", ImVec2(-1.0f, BoxHeight), ImGuiChildFlags_Borders))
 	{
+		// Gate interaction on raw mouse-rect math instead of IsWindowHovered(),
+		// whose hover/active-id blocking rules would drop clicks mid-drag.
+		const ImVec2 ChildMin = ImGui::GetWindowPos();
+		const ImVec2 ChildSize = ImGui::GetWindowSize();
+		ImVec2 ChildMax = ImVec2(ChildMin.x + ChildSize.x, ChildMin.y + ChildSize.y);
+		if (ImGui::GetScrollMaxY() > 0.0f) ChildMax.x -= ImGui::GetStyle().ScrollbarSize;
+		const ImVec2 Mouse = ImGui::GetMousePos();
+		const bool MouseInBox = Mouse.x >= ChildMin.x && Mouse.x < ChildMax.x &&
+			Mouse.y >= ChildMin.y && Mouse.y < ChildMax.y;
+		const int WordCount = (int)Ui->TranscribedTextBoxWords.size();
+
 		// Match the InputTextMultiline line pitch (no spacing between wrapped lines)
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
 			ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
@@ -1317,16 +1331,11 @@ render_transcribed_text_box(GlobalState *AppState)
 		}
 		ImGui::PopStyleVar();
 
-		const int WordCount = (int)Ui->TranscribedTextBoxWords.size();
-		if (Ui->TranscribedTextSelectAnchor >= WordCount) Ui->TranscribedTextSelectAnchor = WordCount - 1;
-		if (Ui->TranscribedTextSelectFocus >= WordCount) Ui->TranscribedTextSelectFocus = WordCount - 1;
+		if (MouseInBox && WordCount > 0) ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
 
-		bool Hovered = ImGui::IsWindowHovered();
-		if (Hovered && WordCount > 0) ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
-
-		if (Hovered && ImGui::IsMouseClicked(0))
+		if (MouseInBox && ImGui::IsMouseClicked(0))
 		{
-			int Hit = transcribed_text_hit_test(WordRects, ImGui::GetMousePos());
+			int Hit = transcribed_text_hit_test(WordRects, Mouse);
 			if (ImGui::GetIO().KeyShift && Ui->TranscribedTextSelectAnchor >= 0 && Hit >= 0)
 			{
 				Ui->TranscribedTextSelectFocus = Hit;
@@ -1339,20 +1348,15 @@ render_transcribed_text_box(GlobalState *AppState)
 			Ui->TranscribedTextSelecting = (Hit >= 0);
 		}
 
+		if (Ui->TranscribedTextSelecting && !ImGui::IsMouseDown(0)) Ui->TranscribedTextSelecting = false;
+
 		if (Ui->TranscribedTextSelecting)
 		{
-			if (ImGui::IsMouseDown(0))
-			{
-				int Hit = transcribed_text_hit_test(WordRects, ImGui::GetMousePos());
-				if (Hit >= 0) Ui->TranscribedTextSelectFocus = Hit;
-			}
-			else
-			{
-				Ui->TranscribedTextSelecting = false;
-			}
+			int Hit = transcribed_text_hit_test(WordRects, Mouse);
+			if (Hit >= 0) Ui->TranscribedTextSelectFocus = Hit;
 		}
 
-		if (Hovered && WordCount > 0)
+		if (MouseInBox && WordCount > 0)
 		{
 			if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A))
 			{
