@@ -1,4 +1,6 @@
 # VoiceTyper
+![](media/voicetyper-icon.png)
+
 VoiceTyper aspires to be a fast, lightweight, native, fully-local and offline dictation application.
 As a standalone program, it can be used to input text directly from your voice into other 
 desktop applications such as your web browser, note taking app, or even messaging
@@ -9,10 +11,11 @@ LLMs are used to write code in this project with human review done at our discre
 
 LLM Coding Agent Harnesses Used:
 [OpenCode](https://github.com/anomalyco/opencode),
-[Codex](https://github.com/openai/codex)
+[Codex](https://github.com/openai/codex),
 [Claude Code](https://code.claude.com/docs/en/overview)
 
 LLMs Used:
+[GLM 5.3](https://z.ai/blog/glm-5.3),
 [GLM 5.2](https://z.ai/blog/glm-5.2),
 [Kimi K3](https://www.kimi.com/ai-models/kimi-k3),
 [OpenCode Zen Big Pickle](https://grokipedia.com/page/Big_Pickle_model),

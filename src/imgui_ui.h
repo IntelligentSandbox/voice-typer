@@ -62,6 +62,20 @@ colored_button(const char *Label, const ImVec2 &Size, const ImVec4 &Color, bool 
 }
 
 // ---------------------------------------------------------------------------
+// Modal helper: close the current modal popup when clicking outside of it
+// ---------------------------------------------------------------------------
+static void
+modal_close_on_click_outside(bool *IsOpenFlag)
+{
+	if (ImGui::IsWindowAppearing()) return;
+	if (ImGui::IsWindowHovered()) return;
+	if (!ImGui::IsMouseClicked(0)) return;
+
+	*IsOpenFlag = false;
+	ImGui::CloseCurrentPopup();
+}
+
+// ---------------------------------------------------------------------------
 // Combo helper for std::vector<std::string>
 // ---------------------------------------------------------------------------
 static bool
@@ -210,6 +224,11 @@ render_update_modal(GlobalState *AppState)
 
 	if (!U->IsModalOpen) return;
 
+	if (!ImGui::IsPopupOpen("Check for Updates"))
+	{
+		ImGui::OpenPopup("Check for Updates");
+	}
+
 	ImVec2 Display = ImGui::GetIO().DisplaySize;
 	float WinW = Display.x * 0.6f;
 	if (WinW > 560.0f) WinW = 560.0f;
@@ -218,9 +237,9 @@ render_update_modal(GlobalState *AppState)
 	ImGui::SetNextWindowBgAlpha(1.0f);
 
 	bool Open = true;
-	if (ImGui::Begin("Check for Updates", &Open,
-		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse))
+	if (ImGui::BeginPopupModal("Check for Updates", &Open, ImGuiWindowFlags_AlwaysAutoResize))
 	{
+		modal_close_on_click_outside(&U->IsModalOpen);
 		ImGui::TextDisabled("v%s", VOICETYPER_VERSION_FULL);
 		ImGui::Spacing();
 
@@ -313,10 +332,8 @@ render_update_modal(GlobalState *AppState)
 		ImGui::TextDisabled("%s", platform_is_installed_build() ?
 			"Installed (MSI) build detected" : "Portable build detected");
 
-		ImGui::Separator();
-		if (ImGui::Button("Close")) U->IsModalOpen = false;
+		ImGui::EndPopup();
 	}
-	ImGui::End();
 
 	if (!Open) U->IsModalOpen = false;
 }
@@ -637,16 +654,21 @@ render_settings_panel(GlobalState *AppState)
 	ImGui::Separator();
 	render_font_name_input(AppState);
 
+	float NumInputWidth = ImGui::GetFontSize() * 5.5f;
+
 	ImGui::TextUnformatted("Font size");
-	ImGui::SetNextItemWidth(-1.0f);
-	if (ImGui::SliderInt("##UiFontSize", &AppState->UiFontSize, 8, 72, "%d px"))
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(NumInputWidth);
+	if (ImGui::InputInt("##UiFontSize", &AppState->UiFontSize, 1, 1))
 	{
+		if (AppState->UiFontSize < 8) AppState->UiFontSize = 8;
+		if (AppState->UiFontSize > 72) AppState->UiFontSize = 72;
 		save_int_setting("ui_font_size", AppState->UiFontSize);
 	}
 
 	ImGui::Text("CPU Cores for Inference:");
 	ImGui::SameLine();
-	ImGui::SetNextItemWidth(100);
+	ImGui::SetNextItemWidth(NumInputWidth);
 	int MaxCores = query_logical_processor_count();
 	if (ImGui::InputInt("##ThreadCount", &AppState->WhisperThreadCount, 1, 1))
 	{
@@ -1241,20 +1263,30 @@ render_download_modal(GlobalState *AppState)
 
 	if (!D->IsModalOpen) return;
 
+	if (!ImGui::IsPopupOpen("Download Models"))
+	{
+		ImGui::OpenPopup("Download Models");
+	}
+
 	float LongestNameW = 0.0f;
+	float LongestSizeW = 0.0f;
 	for (const CatalogModel &M : get_model_catalog())
 	{
 		float W = ImGui::CalcTextSize(M.Name).x;
 		if (W > LongestNameW) LongestNameW = W;
+		W = ImGui::CalcTextSize(format_bytes(M.SizeBytes).c_str()).x;
+		if (W > LongestSizeW) LongestSizeW = W;
 	}
 	{
 		float W = ImGui::CalcTextSize(VAD_MODEL_DISPLAY_NAME).x;
 		if (W > LongestNameW) LongestNameW = W;
+		W = ImGui::CalcTextSize(format_bytes(VAD_MODEL_SIZE_BYTES).c_str()).x;
+		if (W > LongestSizeW) LongestSizeW = W;
 	}
 	const float ModelColW = LongestNameW + 50.0f;
-	const float SizeColW = 80.0f;
-	const float ActionColW = ImGui::CalcTextSize("Re-download").x + ImGui::GetStyle().FramePadding.x * 6.0f +
-		ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
+	const float SizeColW = LongestSizeW + ImGui::GetStyle().CellPadding.x * 2.0f;
+	const float ActionColW = (ImGui::CalcTextSize("Re-download").x + ImGui::GetStyle().FramePadding.x * 6.0f) * 2.0f +
+		ImGui::GetStyle().ItemSpacing.x + ImGui::GetStyle().CellPadding.x * 2.0f;
 
 	ImVec2 Display = ImGui::GetIO().DisplaySize;
 	const ImGuiStyle &Style = ImGui::GetStyle();
@@ -1266,8 +1298,9 @@ render_download_modal(GlobalState *AppState)
 	ImGui::SetNextWindowPos(ImVec2(Display.x * 0.5f, Display.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
 	bool Open = true;
-	if (ImGui::Begin("Download Models", &Open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize))
+	if (ImGui::BeginPopupModal("Download Models", &Open, ImGuiWindowFlags_AlwaysAutoResize))
 	{
+		modal_close_on_click_outside(&D->IsModalOpen);
 		bool Running = D->IsRunning.load();
 		if (Running)
 		{
@@ -1312,8 +1345,9 @@ render_download_modal(GlobalState *AppState)
 				Label += "##cat-";
 				Label += M.Name;
 				float AvailX = ImGui::GetContentRegionAvail().x;
-				float DeleteW = Installed ? ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x : 0.0f;
-				if (ImGui::Button(Label.c_str(), ImVec2(AvailX - DeleteW, 0.0f)))
+				float Spacing = ImGui::GetStyle().ItemSpacing.x;
+				float BtnW = Installed ? (AvailX - Spacing) * 0.5f : AvailX;
+				if (ImGui::Button(Label.c_str(), ImVec2(BtnW, 0.0f)))
 				{
 					D->PendingModelName = M.Name;
 					D->PendingUrl = catalog_model_url(M.Name);
@@ -1331,8 +1365,8 @@ render_download_modal(GlobalState *AppState)
 				if (Installed)
 				{
 					ImGui::SameLine();
-					std::string DeleteLabel = std::string("X##del-cat-") + M.Name;
-					if (colored_button(DeleteLabel.c_str(), ImVec2(ImGui::GetFrameHeight(), 0.0f), BUTTON_COLOR_RED))
+					std::string DeleteLabel = std::string("Delete##del-cat-") + M.Name;
+					if (colored_button(DeleteLabel.c_str(), ImVec2(BtnW, 0.0f), BUTTON_COLOR_RED))
 					{
 						std::string SttDir = platform_join_path(platform_get_exe_dir(), "stt_models");
 						std::string Path = platform_join_path(SttDir, Filename);
@@ -1371,48 +1405,48 @@ render_download_modal(GlobalState *AppState)
 				ImGui::TextDisabled("%s", format_bytes(VAD_MODEL_SIZE_BYTES).c_str());
 				ImGui::TableSetColumnIndex(2);
 
-			bool VadInstalled = vad_model_installed(AppState);
-			std::string VadLabel = VadInstalled ? "Re-download##vad" : "Download##vad";
-			float AvailX = ImGui::GetContentRegionAvail().x;
-			float DeleteW = VadInstalled ? ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x : 0.0f;
-			if (ImGui::Button(VadLabel.c_str(), ImVec2(AvailX - DeleteW, 0.0f)))
-			{
-				D->PendingModelName = VAD_MODEL_DISPLAY_NAME;
-				D->PendingUrl = vad_model_url();
-				std::string VadDir = platform_join_path(platform_get_exe_dir(), "vad_models");
-				D->PendingDestPath = platform_join_path(VadDir, VAD_MODEL_FILENAME);
-				D->PendingSize = VAD_MODEL_SIZE_BYTES;
-				if (VadInstalled) D->WantsOverwriteConfirm = true;
-				else
+				bool VadInstalled = vad_model_installed(AppState);
+				std::string VadLabel = VadInstalled ? "Re-download##vad" : "Download##vad";
+				float AvailX = ImGui::GetContentRegionAvail().x;
+				float Spacing = ImGui::GetStyle().ItemSpacing.x;
+				float BtnW = VadInstalled ? (AvailX - Spacing) * 0.5f : AvailX;
+				if (ImGui::Button(VadLabel.c_str(), ImVec2(BtnW, 0.0f)))
 				{
-					platform_ensure_directory(VadDir);
-					start_model_download(AppState, VAD_MODEL_DISPLAY_NAME, D->PendingUrl, D->PendingDestPath, VAD_MODEL_SIZE_BYTES);
-				}
-			}
-
-			if (VadInstalled)
-			{
-				ImGui::SameLine();
-				if (colored_button("X##del-vad", ImVec2(ImGui::GetFrameHeight(), 0.0f), BUTTON_COLOR_RED))
-				{
-					if (remove(AppState->VadModelPath.c_str()) == 0)
-					{
-						std::string Msg = std::string("Deleted ") + VAD_MODEL_DISPLAY_NAME;
-						show_success_toast(AppState, Msg.c_str());
-					}
+					D->PendingModelName = VAD_MODEL_DISPLAY_NAME;
+					D->PendingUrl = vad_model_url();
+					std::string VadDir = platform_join_path(platform_get_exe_dir(), "vad_models");
+					D->PendingDestPath = platform_join_path(VadDir, VAD_MODEL_FILENAME);
+					D->PendingSize = VAD_MODEL_SIZE_BYTES;
+					if (VadInstalled) D->WantsOverwriteConfirm = true;
 					else
 					{
-						std::string Msg = std::string("Failed to delete ") + VAD_MODEL_DISPLAY_NAME;
-						show_toast(AppState, Msg.c_str());
+						platform_ensure_directory(VadDir);
+						start_model_download(AppState, VAD_MODEL_DISPLAY_NAME, D->PendingUrl, D->PendingDestPath, VAD_MODEL_SIZE_BYTES);
 					}
 				}
-			}
+
+				if (VadInstalled)
+				{
+					ImGui::SameLine();
+					if (colored_button("Delete##del-vad", ImVec2(BtnW, 0.0f), BUTTON_COLOR_RED))
+					{
+						if (remove(AppState->VadModelPath.c_str()) == 0)
+						{
+							std::string Msg = std::string("Deleted ") + VAD_MODEL_DISPLAY_NAME;
+							show_success_toast(AppState, Msg.c_str());
+						}
+						else
+						{
+							std::string Msg = std::string("Failed to delete ") + VAD_MODEL_DISPLAY_NAME;
+							show_toast(AppState, Msg.c_str());
+						}
+					}
+				}
 				ImGui::EndTable();
 			}
 		}
 
 		ImGui::Separator();
-		if (ImGui::Button("Close")) D->IsModalOpen = false;
 
 		if (D->WantsOverwriteConfirm)
 		{
@@ -1451,8 +1485,8 @@ render_download_modal(GlobalState *AppState)
 			}
 			ImGui::EndPopup();
 		}
+		ImGui::EndPopup();
 	}
-	ImGui::End();
 
 	if (!Open) D->IsModalOpen = false;
 }
@@ -1500,11 +1534,11 @@ render_main_ui(GlobalState *AppState, ImGuiIO &Io)
 	ImGui::SetNextItemWidth(-1.0f);
 	render_transcribed_text_box(AppState);
 
+	render_download_modal(AppState);
+	render_update_modal(AppState);
 	render_crash_dialog_ui(AppState);
 
 	ImGui::End();
 
-	render_download_modal(AppState);
-	render_update_modal(AppState);
 	render_toast_ui(AppState, Io);
 }
