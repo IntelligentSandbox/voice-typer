@@ -262,6 +262,9 @@ struct UiRuntimeState
 	std::vector<TranscribedWord> TranscribedTextBoxWords;
 	std::vector<char> TranscribedTextBoxBuffer;
 	int TranscribedTextBoxSerial;
+	int TranscribedTextSelectAnchor; // word index, -1 = no selection
+	int TranscribedTextSelectFocus;  // word index, -1 = no selection
+	bool TranscribedTextSelecting;
 	bool FontReloadRequested;
 };
 

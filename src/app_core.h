@@ -49,6 +49,9 @@ app_initialize_runtime(GlobalState *AppState, PlatformWindowHandle OwnWindow)
 	AppState->Ui.IsCrashDialogOpen = false;
 	AppState->Ui.CrashDialogOpened = false;
 	AppState->Ui.PendingCrashDumps.clear();
+	AppState->Ui.TranscribedTextSelectAnchor = -1;
+	AppState->Ui.TranscribedTextSelectFocus = -1;
+	AppState->Ui.TranscribedTextSelecting = false;
 	AppState->InferenceDevicePrefersCpu = false;
 	AppState->PlayRecordSound = false;
 	AppState->StartSoundFreq = SOUND_DEFAULT_START_FREQ;

@@ -233,11 +233,12 @@ render_update_modal(GlobalState *AppState)
 	float WinW = Display.x * 0.6f;
 	if (WinW > 560.0f) WinW = 560.0f;
 	ImGui::SetNextWindowSize(ImVec2(WinW, 0.0f), ImGuiCond_Appearing);
-	ImGui::SetNextWindowPos(ImVec2(Display.x * 0.5f, Display.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(ImVec2(Display.x * 0.5f, Display.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 	ImGui::SetNextWindowBgAlpha(1.0f);
 
 	bool Open = true;
-	if (ImGui::BeginPopupModal("Check for Updates", &Open, ImGuiWindowFlags_AlwaysAutoResize))
+	if (ImGui::BeginPopupModal("Check for Updates", &Open,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 	{
 		modal_close_on_click_outside(&U->IsModalOpen);
 		ImGui::TextDisabled("v%s", VOICETYPER_VERSION_FULL);
@@ -656,7 +657,7 @@ render_settings_panel(GlobalState *AppState)
 
 	float NumInputWidth = ImGui::GetFontSize() * 5.5f;
 
-	ImGui::TextUnformatted("Font size");
+	ImGui::TextUnformatted("Font size:");
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(NumInputWidth);
 	if (ImGui::InputInt("##UiFontSize", &AppState->UiFontSize, 1, 1))
@@ -932,6 +933,17 @@ render_crash_dialog_ui(GlobalState *AppState)
 // ---------------------------------------------------------------------------
 // Left column - recording controls and model selectors
 // ---------------------------------------------------------------------------
+static std::string
+format_timing_ms(double Ms)
+{
+	if (Ms < 0.0) return "\xe2\x80\x94";
+
+	char Buf[64];
+	if (Ms < 1000.0) snprintf(Buf, sizeof(Buf), "%.4f ms", Ms);
+	else snprintf(Buf, sizeof(Buf), "%.4f s", Ms / 1000.0);
+	return std::string(Buf);
+}
+
 static void
 render_left_panel(GlobalState *AppState)
 {
@@ -1109,20 +1121,12 @@ render_left_panel(GlobalState *AppState)
 			ImGui::TextDisabled("(loading GPU devices...)");
 		}
 	}
-}
 
-// ---------------------------------------------------------------------------
-// Bottom bar - live operation timings
-// ---------------------------------------------------------------------------
-static std::string
-format_timing_ms(double Ms)
-{
-	if (Ms < 0.0) return "\xe2\x80\x94";
-
-	char Buf[64];
-	if (Ms < 1000.0) snprintf(Buf, sizeof(Buf), "%.4f ms", Ms);
-	else snprintf(Buf, sizeof(Buf), "%.4f s", Ms / 1000.0);
-	return std::string(Buf);
+	// Live operation timings
+	ImGui::Separator();
+	ImGui::Text("Model load: %s", format_timing_ms(AppState->LastModelLoadMs.load()).c_str());
+	ImGui::Text("Transcription: %s", format_timing_ms(AppState->LastTranscriptionMs.load()).c_str());
+	ImGui::Text("Paste: %s", format_timing_ms(AppState->LastPasteMs.load()).c_str());
 }
 
 static std::string
@@ -1148,27 +1152,84 @@ model_filename_installed(GlobalState *AppState, const std::string &Filename)
 	return false;
 }
 
-static void
-render_bottom_bar(GlobalState *AppState)
-{
-	ImGui::Separator();
-
-	ImGui::TextDisabled("Timings");
-	ImGui::SameLine();
-
-	ImGui::Text("Model load: %s", format_timing_ms(AppState->LastModelLoadMs.load()).c_str());
-	ImGui::SameLine();
-	ImGui::Text("Transcription: %s", format_timing_ms(AppState->LastTranscriptionMs.load()).c_str());
-	ImGui::SameLine();
-	ImGui::Text("Paste: %s", format_timing_ms(AppState->LastPasteMs.load()).c_str());
-}
-
 static ImVec4
 transcribed_word_confidence_color(float Confidence)
 {
 	if (Confidence >= 0.85f) return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	if (Confidence >= 0.60f) return ImVec4(0.92f, 0.78f, 0.30f, 1.0f);
 	return ImVec4(0.92f, 0.35f, 0.35f, 1.0f);
+}
+
+// Map a screen position onto a word index of the laid-out confidence text.
+// Words on the same wrapped line share Min.y; positions above/below the text
+// clamp to the first/last word. Returns -1 when there are no words.
+static int
+transcribed_text_hit_test(const std::vector<ImVec4> &WordRects, const ImVec2 &Pos)
+{
+	const int Count = (int)WordRects.size();
+	if (Count == 0) return -1;
+	if (Pos.y < WordRects[0].y) return 0;
+	if (Pos.y >= WordRects[Count - 1].y) return Count - 1;
+
+	int LineBegin = 0;
+	for (int i = 0; i < Count; i++)
+	{
+		if (WordRects[i].y <= Pos.y) LineBegin = i;
+	}
+	while (LineBegin > 0 && WordRects[LineBegin - 1].y == WordRects[LineBegin].y) LineBegin--;
+	int LineEnd = LineBegin;
+	while (LineEnd + 1 < Count && WordRects[LineEnd + 1].y == WordRects[LineBegin].y) LineEnd++;
+
+	if (Pos.x <= WordRects[LineBegin].x) return LineBegin;
+	for (int i = LineBegin; i <= LineEnd; i++)
+	{
+		if (Pos.x < WordRects[i].z) return i;
+	}
+	return LineEnd;
+}
+
+static bool
+transcribed_text_word_selected(const UiRuntimeState *Ui, int WordIndex)
+{
+	if (Ui->TranscribedTextSelectAnchor < 0 || Ui->TranscribedTextSelectFocus < 0) return false;
+
+	int A = Ui->TranscribedTextSelectAnchor;
+	int B = Ui->TranscribedTextSelectFocus;
+	if (A > B)
+	{
+		int T = A;
+		A = B;
+		B = T;
+	}
+	return WordIndex >= A && WordIndex <= B;
+}
+
+static void
+transcribed_text_copy_selection(UiRuntimeState *Ui)
+{
+	if (Ui->TranscribedTextSelectAnchor < 0 || Ui->TranscribedTextSelectFocus < 0) return;
+
+	int A = Ui->TranscribedTextSelectAnchor;
+	int B = Ui->TranscribedTextSelectFocus;
+	if (A > B)
+	{
+		int T = A;
+		A = B;
+		B = T;
+	}
+	if (B >= (int)Ui->TranscribedTextBoxWords.size()) return;
+
+	std::string Text;
+	for (int i = A; i <= B; i++)
+	{
+		Text += Ui->TranscribedTextBoxWords[i].Text;
+	}
+
+	size_t Start = Text.find_first_not_of(" \t\r\n");
+	size_t End = Text.find_last_not_of(" \t\r\n");
+	if (Start == std::string::npos) return;
+	Text = Text.substr(Start, End - Start + 1);
+	if (!Text.empty()) ImGui::SetClipboardText(Text.c_str());
 }
 
 static void
@@ -1182,6 +1243,9 @@ render_transcribed_text_box(GlobalState *AppState)
 		{
 			Ui->TranscribedTextBoxSerial = Ui->TranscribedTextSerial;
 			Ui->TranscribedTextBoxWords = Ui->TranscribedTextWords;
+			Ui->TranscribedTextSelectAnchor = -1;
+			Ui->TranscribedTextSelectFocus = -1;
+			Ui->TranscribedTextSelecting = false;
 
 			Ui->TranscribedTextBoxBuffer.clear();
 			for (const TranscribedWord &Word : Ui->TranscribedTextBoxWords)
@@ -1211,21 +1275,94 @@ render_transcribed_text_box(GlobalState *AppState)
 		return;
 	}
 
+	std::vector<ImVec4> WordRects;
+	WordRects.reserve(Ui->TranscribedTextBoxWords.size());
+
 	if (ImGui::BeginChild("##TranscribedTextConfidence", ImVec2(-1.0f, BoxHeight), ImGuiChildFlags_Borders))
 	{
+		// Match the InputTextMultiline line pitch (no spacing between wrapped lines)
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+			ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+
 		float WrapRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
 		float LineEndX = ImGui::GetCursorPosX();
 		bool LineStarted = false;
+		int WordIndex = 0;
 		for (const TranscribedWord &Word : Ui->TranscribedTextBoxWords)
 		{
 			float WordW = ImGui::CalcTextSize(Word.Text.c_str()).x;
 			if (LineStarted && LineEndX + WordW <= WrapRight) ImGui::SameLine(0.0f, 0.0f);
 			else LineEndX = ImGui::GetCursorPosX();
+
+			if (transcribed_text_word_selected(Ui, WordIndex))
+			{
+				ImVec2 RectMin = ImGui::GetCursorScreenPos();
+				ImGui::GetWindowDrawList()->AddRectFilled(
+					ImVec2(RectMin.x, RectMin.y),
+					ImVec2(RectMin.x + WordW, RectMin.y + ImGui::GetTextLineHeight()),
+					ImGui::GetColorU32(ImGuiCol_TextSelectedBg));
+			}
+
 			ImGui::PushStyleColor(ImGuiCol_Text, transcribed_word_confidence_color(Word.Confidence));
 			ImGui::TextUnformatted(Word.Text.c_str());
 			ImGui::PopStyleColor();
+
+			ImVec2 RectMin = ImGui::GetItemRectMin();
+			ImVec2 RectMax = ImGui::GetItemRectMax();
+			WordRects.push_back(ImVec4(RectMin.x, RectMin.y, RectMax.x, RectMax.y));
+
 			LineEndX += WordW;
 			LineStarted = true;
+			WordIndex++;
+		}
+		ImGui::PopStyleVar();
+
+		const int WordCount = (int)Ui->TranscribedTextBoxWords.size();
+		if (Ui->TranscribedTextSelectAnchor >= WordCount) Ui->TranscribedTextSelectAnchor = WordCount - 1;
+		if (Ui->TranscribedTextSelectFocus >= WordCount) Ui->TranscribedTextSelectFocus = WordCount - 1;
+
+		bool Hovered = ImGui::IsWindowHovered();
+		if (Hovered && WordCount > 0) ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
+
+		if (Hovered && ImGui::IsMouseClicked(0))
+		{
+			int Hit = transcribed_text_hit_test(WordRects, ImGui::GetMousePos());
+			if (ImGui::GetIO().KeyShift && Ui->TranscribedTextSelectAnchor >= 0 && Hit >= 0)
+			{
+				Ui->TranscribedTextSelectFocus = Hit;
+			}
+			else
+			{
+				Ui->TranscribedTextSelectAnchor = Hit;
+				Ui->TranscribedTextSelectFocus = Hit;
+			}
+			Ui->TranscribedTextSelecting = (Hit >= 0);
+		}
+
+		if (Ui->TranscribedTextSelecting)
+		{
+			if (ImGui::IsMouseDown(0))
+			{
+				int Hit = transcribed_text_hit_test(WordRects, ImGui::GetMousePos());
+				if (Hit >= 0) Ui->TranscribedTextSelectFocus = Hit;
+			}
+			else
+			{
+				Ui->TranscribedTextSelecting = false;
+			}
+		}
+
+		if (Hovered && WordCount > 0)
+		{
+			if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A))
+			{
+				Ui->TranscribedTextSelectAnchor = 0;
+				Ui->TranscribedTextSelectFocus = WordCount - 1;
+			}
+			if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_C))
+			{
+				transcribed_text_copy_selection(Ui);
+			}
 		}
 	}
 	ImGui::EndChild();
@@ -1322,13 +1459,20 @@ render_download_modal(GlobalState *AppState)
 			ImGui::TextDisabled("Source: huggingface.co/ggerganov/whisper.cpp");
 			ImGui::Spacing();
 
-			if (ImGui::BeginTable("##CatalogTable", 3,
-				ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
-			{
+		if (ImGui::BeginTable("##CatalogTable", 3,
+			ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+		{
 			ImGui::TableSetupColumn("Model", ImGuiTableColumnFlags_WidthFixed, ModelColW);
 			ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, SizeColW);
-			ImGui::TableSetupColumn("##Action", ImGuiTableColumnFlags_WidthFixed, ActionColW);
-				ImGui::TableHeadersRow();
+			ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthStretch);
+
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::TextUnformatted("Model");
+			ImGui::TableSetColumnIndex(1);
+			ImGui::TextUnformatted("Size");
+			ImGui::TableSetColumnIndex(2);
+			ImGui::TextUnformatted("Actions");
 
 				for (const CatalogModel &M : get_model_catalog())
 				{
@@ -1391,13 +1535,13 @@ render_download_modal(GlobalState *AppState)
 			ImGui::TextDisabled("VAD Model (Voice Activity Detection) - source: huggingface.co/ggml-org/whisper-vad");
 			ImGui::Spacing();
 
-			if (ImGui::BeginTable("##VadTable", 3,
-				ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
-			{
-				ImGui::TableSetupColumn("Model", ImGuiTableColumnFlags_WidthFixed, ModelColW);
-				ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, SizeColW);
-				ImGui::TableSetupColumn("##Action", ImGuiTableColumnFlags_WidthFixed, ActionColW);
-				ImGui::TableNextRow();
+		if (ImGui::BeginTable("##VadTable", 3,
+			ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+		{
+			ImGui::TableSetupColumn("Model", ImGuiTableColumnFlags_WidthFixed, ModelColW);
+			ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, SizeColW);
+			ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableNextRow();
 
 				ImGui::TableSetColumnIndex(0);
 				ImGui::TextUnformatted(VAD_MODEL_DISPLAY_NAME);
@@ -1527,10 +1671,6 @@ render_main_ui(GlobalState *AppState, ImGuiIO &Io)
 
 	float TallerEndY = (LeftEndY > RightEndY) ? LeftEndY : RightEndY;
 	ImGui::SetCursorPos(ImVec2(Padding, TallerEndY + Padding));
-	render_bottom_bar(AppState);
-
-	const float BottomBarEndY = ImGui::GetCursorPosY() + ImGui::GetStyle().ItemSpacing.y;
-	ImGui::SetCursorPos(ImVec2(Padding, BottomBarEndY));
 	ImGui::SetNextItemWidth(-1.0f);
 	render_transcribed_text_box(AppState);
 
