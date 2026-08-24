@@ -1318,6 +1318,7 @@ render_download_modal(GlobalState *AppState)
 	if (!ImGui::IsPopupOpen("Download Models"))
 	{
 		ImGui::OpenPopup("Download Models");
+		D->ModalWidth = 0.0f;
 	}
 
 	float LongestNameW = 0.0f;
@@ -1345,8 +1346,10 @@ render_download_modal(GlobalState *AppState)
 	float ContentW = ModelColW + SizeColW + ActionColW + Style.CellPadding.x * 2.0f * 3.0f;
 	float WinW = ContentW + Style.WindowPadding.x * 2.0f + Style.ScrollbarSize;
 	if (WinW > Display.x * 0.95f) WinW = Display.x * 0.95f;
+	float MinW = WinW;
+	if (D->ModalWidth > MinW && D->ModalWidth <= Display.x * 0.95f) MinW = D->ModalWidth;
 	ImGui::SetNextWindowBgAlpha(1.0f);
-	ImGui::SetNextWindowSizeConstraints(ImVec2(WinW, 0.0f), ImVec2(Display.x * 0.95f, Display.y * 0.95f));
+	ImGui::SetNextWindowSizeConstraints(ImVec2(MinW, 0.0f), ImVec2(Display.x * 0.95f, Display.y * 0.95f));
 	ImGui::SetNextWindowPos(ImVec2(Display.x * 0.5f, Display.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
 	bool Open = true;
@@ -1354,6 +1357,7 @@ render_download_modal(GlobalState *AppState)
 	{
 		modal_close_on_click_outside(&D->IsModalOpen);
 		bool Running = D->IsRunning.load();
+		if (!Running) D->ModalWidth = ImGui::GetWindowWidth();
 		if (Running)
 		{
 			ImGui::Text("Downloading %s...", D->CurrentModelName.c_str());

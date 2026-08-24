@@ -73,6 +73,7 @@ struct ModelDownloadState
 	bool JustFinished;
 	bool IsModalOpen;
 	bool WantsOverwriteConfirm;
+	float ModalWidth;
 	std::string PendingModelName;
 	std::string PendingUrl;
 	std::string PendingDestPath;
@@ -93,6 +94,7 @@ struct ModelDownloadState
 		JustFinished(false),
 		IsModalOpen(false),
 		WantsOverwriteConfirm(false),
+		ModalWidth(0.0f),
 		PendingSize(0)
 	{}
 
