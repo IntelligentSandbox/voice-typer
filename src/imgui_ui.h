@@ -832,7 +832,6 @@ render_toast_ui(GlobalState *AppState, ImGuiIO &Io)
 		snprintf(ToastWindowName, sizeof(ToastWindowName), "##Toast%d", AppState->Ui.ToastSerial);
 		ImGui::SetNextWindowPos(
 			ImVec2(Display.x * 0.5f, Display.y - 40.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
-		ImGui::SetNextWindowBgAlpha(0.85f);
 		ColorRgba Bg = AppState->Ui.ToastBackgroundColor;
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(Bg.R, Bg.G, Bg.B, Bg.A));
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
