@@ -52,11 +52,13 @@ platform_query_audio_devices()
 }
 
 inline void
-platform_inject_text(PlatformRuntimeState *Platform, void *Window, const char *Utf8, bool CharByChar)
+platform_inject_text(PlatformRuntimeState *Platform, void *Window, const char *Utf8, bool CharByChar,
+	HotkeyConfig PasteHotkey)
 {
 	(void)Platform;
 	(void)Window;
 	(void)CharByChar;
+	(void)PasteHotkey;
 	if (!Utf8 || Utf8[0] == '\0') return;
 
 	SDL_SetClipboardText(Utf8);

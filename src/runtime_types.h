@@ -124,6 +124,15 @@ default_load_model_hotkey()
 	return H;
 }
 
+inline HotkeyConfig
+default_paste_hotkey()
+{
+	HotkeyConfig H = {};
+	H.Modifiers = HOTKEY_MOD_CTRL | HOTKEY_MOD_SHIFT;
+	H.VirtualKey = 'V';
+	return H;
+}
+
 enum RecordingHotkeyMode
 {
 	RECORDING_HOTKEY_HOLD = 0,

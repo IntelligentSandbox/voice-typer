@@ -274,6 +274,7 @@ query_hotkey_settings(GlobalState *AppState)
 	AppState->CancelRecordHotkey = default_cancel_record_hotkey();
 	AppState->StreamHotkey       = default_stream_hotkey();
 	AppState->LoadModelHotkey    = default_load_model_hotkey();
+	AppState->PasteHotkey        = default_paste_hotkey();
 	AppState->RecordHotkeyMode   = default_recording_hotkey_mode();
 
 	int Modifiers = 0, Key = 0;
@@ -300,6 +301,12 @@ query_hotkey_settings(GlobalState *AppState)
 	{
 		AppState->LoadModelHotkey.Modifiers = (AppHotkeyModifiers)Modifiers;
 		AppState->LoadModelHotkey.VirtualKey = (AppKeyCode)Key;
+	}
+
+	if (load_hotkey_setting("paste_hotkey", &Modifiers, &Key))
+	{
+		AppState->PasteHotkey.Modifiers = (AppHotkeyModifiers)Modifiers;
+		AppState->PasteHotkey.VirtualKey = (AppKeyCode)Key;
 	}
 
 	int RecordHotkeyMode = 0;

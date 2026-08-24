@@ -145,6 +145,7 @@ settings_action_hotkey_ptr(GlobalState *AppState, int Action)
 	case 1:  return &AppState->CancelRecordHotkey;
 	case 2:  return &AppState->StreamHotkey;
 	case 3:  return &AppState->LoadModelHotkey;
+	case 4:  return &AppState->PasteHotkey;
 	default: return nullptr;
 	}
 }
@@ -158,6 +159,7 @@ settings_action_setting_name(int Action)
 	case 1:  return "cancel_record_hotkey";
 	case 2:  return "stream_hotkey";
 	case 3:  return "load_model_hotkey";
+	case 4:  return "paste_hotkey";
 	default: return "";
 	}
 }
@@ -627,8 +629,9 @@ render_settings_panel(GlobalState *AppState)
 		ImGui::Unindent(20.0f);
 	}
 
-	if (ImGui::Checkbox("Use character-by-character text injection (instead of paste Ctrl+Shift+V)",
-		&AppState->UseCharByCharInjection))
+	std::string CharByCharLabel = "Use character-by-character text injection (instead of paste " +
+		hotkey_to_label(AppState->PasteHotkey) + ")";
+	if (ImGui::Checkbox(CharByCharLabel.c_str(), &AppState->UseCharByCharInjection))
 	{
 		save_bool_setting("use_char_by_char_injection", AppState->UseCharByCharInjection);
 	}
@@ -679,11 +682,11 @@ render_settings_panel(GlobalState *AppState)
 
 	float AvailWidth = ImGui::GetContentRegionAvail().x;
 	float Spacing = ImGui::GetStyle().ItemSpacing.x;
-	float BtnWidth = (AvailWidth - Spacing * 3) / 4;
+	float BtnWidth = (AvailWidth - Spacing * 4) / 5;
 	ImVec2 ActionSize = ImVec2(BtnWidth, 40);
 
-	const char *ActionLabels[] = { "Record", "Cancel Record", "Stream", "Load Model" };
-	for (int i = 0; i < 4; i++)
+	const char *ActionLabels[] = { "Record", "Cancel Record", "Stream", "Load Model", "Paste Text" };
+	for (int i = 0; i < 5; i++)
 	{
 		if (i > 0) ImGui::SameLine();
 		ImVec4 Color = (S->SelectedAction == i) ? BUTTON_COLOR_BLUE : BUTTON_COLOR_GREY;

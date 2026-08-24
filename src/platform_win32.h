@@ -201,7 +201,7 @@ platform_set_clipboard_text_win32(const char *Utf8Text)
 }
 
 static void
-platform_inject_text_via_paste(HWND TargetWindow, const char *Utf8Text)
+platform_inject_text_via_paste(HWND TargetWindow, const char *Utf8Text, const HotkeyConfig &PasteHotkey)
 {
 	int WideLen = MultiByteToWideChar(CP_UTF8, 0, Utf8Text, -1, nullptr, 0);
 	if (WideLen <= 1) return;
@@ -211,41 +211,58 @@ platform_inject_text_via_paste(HWND TargetWindow, const char *Utf8Text)
 	SetForegroundWindow(TargetWindow);
 	Sleep(50);
 
-	INPUT Inputs[6] = {};
+	WORD ModVk[4];
+	int ModCount = 0;
+	if (PasteHotkey.Modifiers & HOTKEY_MOD_CTRL)  ModVk[ModCount++] = VK_CONTROL;
+	if (PasteHotkey.Modifiers & HOTKEY_MOD_ALT)   ModVk[ModCount++] = VK_MENU;
+	if (PasteHotkey.Modifiers & HOTKEY_MOD_SHIFT) ModVk[ModCount++] = VK_SHIFT;
+	if (PasteHotkey.Modifiers & HOTKEY_MOD_WIN)   ModVk[ModCount++] = VK_LWIN;
 
-	Inputs[0].type = INPUT_KEYBOARD;
-	Inputs[0].ki.wVk = VK_CONTROL;
+	bool HasKey = PasteHotkey.VirtualKey != APP_KEY_NONE;
 
-	Inputs[1].type = INPUT_KEYBOARD;
-	Inputs[1].ki.wVk = VK_SHIFT;
+	INPUT Inputs[10] = {};
+	int Count = 0;
 
-	Inputs[2].type = INPUT_KEYBOARD;
-	Inputs[2].ki.wVk = 'V';
+	for (int i = 0; i < ModCount; i++)
+	{
+		Inputs[Count].type = INPUT_KEYBOARD;
+		Inputs[Count].ki.wVk = ModVk[i];
+		Count++;
+	}
 
-	Inputs[3].type = INPUT_KEYBOARD;
-	Inputs[3].ki.wVk = 'V';
-	Inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+	if (HasKey)
+	{
+		Inputs[Count].type = INPUT_KEYBOARD;
+		Inputs[Count].ki.wVk = (WORD)PasteHotkey.VirtualKey;
+		Count++;
 
-	Inputs[4].type = INPUT_KEYBOARD;
-	Inputs[4].ki.wVk = VK_SHIFT;
-	Inputs[4].ki.dwFlags = KEYEVENTF_KEYUP;
+		Inputs[Count].type = INPUT_KEYBOARD;
+		Inputs[Count].ki.wVk = (WORD)PasteHotkey.VirtualKey;
+		Inputs[Count].ki.dwFlags = KEYEVENTF_KEYUP;
+		Count++;
+	}
 
-	Inputs[5].type = INPUT_KEYBOARD;
-	Inputs[5].ki.wVk = VK_CONTROL;
-	Inputs[5].ki.dwFlags = KEYEVENTF_KEYUP;
+	for (int i = ModCount - 1; i >= 0; i--)
+	{
+		Inputs[Count].type = INPUT_KEYBOARD;
+		Inputs[Count].ki.wVk = ModVk[i];
+		Inputs[Count].ki.dwFlags = KEYEVENTF_KEYUP;
+		Count++;
+	}
 
-	SendInput(6, Inputs, sizeof(INPUT));
+	SendInput(Count, Inputs, sizeof(INPUT));
 }
 
 inline void
-platform_inject_text(PlatformRuntimeState *Platform, void *Window, const char *Utf8, bool CharByChar)
+platform_inject_text(PlatformRuntimeState *Platform, void *Window, const char *Utf8, bool CharByChar,
+	HotkeyConfig PasteHotkey)
 {
 	(void)Platform;
 	HWND HWnd = (HWND)Window;
 	if (!HWnd || !Utf8 || Utf8[0] == '\0') return;
 
 	if (CharByChar) platform_inject_text_char_by_char(HWnd, Utf8);
-	else platform_inject_text_via_paste(HWnd, Utf8);
+	else platform_inject_text_via_paste(HWnd, Utf8, PasteHotkey);
 }
 
 inline void

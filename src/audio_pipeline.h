@@ -83,7 +83,8 @@ run_whisper_on_chunk(GlobalState *AppState, whisper_full_params &Params, std::ve
 			&AppState->Platform,
 			TargetWindow,
 			Transcription.c_str(),
-			AppState->UseCharByCharInjection);
+			AppState->UseCharByCharInjection,
+			AppState->PasteHotkey);
 		std::chrono::steady_clock::time_point PasteEnd = std::chrono::steady_clock::now();
 		double PasteMs = std::chrono::duration<double, std::milli>(PasteEnd - PasteStart).count();
 		AppState->LastPasteMs.store(PasteMs);

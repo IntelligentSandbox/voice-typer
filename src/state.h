@@ -180,6 +180,7 @@ struct CoreRuntimeState
 	HotkeyConfig CancelRecordHotkey;
 	HotkeyConfig StreamHotkey;
 	HotkeyConfig LoadModelHotkey;
+	HotkeyConfig PasteHotkey;
 	RecordingHotkeyMode RecordHotkeyMode;
 
 	// Logic
