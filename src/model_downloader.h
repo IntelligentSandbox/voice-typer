@@ -29,6 +29,8 @@ winhttp_download_thread(GlobalState *AppState, std::string Url, std::string Dest
 	AppState->Ui.Download.DownloadedBytes.store(0);
 	AppState->Ui.Download.TotalBytes.store(ExpectedSize);
 
+	std::string PartPath = DestPath + ".part";
+
 	std::wstring WideUrl(Url.begin(), Url.end());
 	URL_COMPONENTSW Comp = {};
 	Comp.dwStructSize = sizeof(Comp);
@@ -103,7 +105,7 @@ winhttp_download_thread(GlobalState *AppState, std::string Url, std::string Dest
 	}
 
 	FILE *File = nullptr;
-	fopen_s(&File, DestPath.c_str(), "wb");
+	fopen_s(&File, PartPath.c_str(), "wb");
 	if (!File)
 	{
 		WinHttpCloseHandle(Request); WinHttpCloseHandle(Connect); WinHttpCloseHandle(Session);
@@ -138,12 +140,21 @@ winhttp_download_thread(GlobalState *AppState, std::string Url, std::string Dest
 	bool Canceled = AppState->Ui.Download.CancelRequested.load();
 	if (Error || Canceled || Total == 0)
 	{
-		remove(DestPath.c_str());
+		remove(PartPath.c_str());
 		AppState->Ui.Download.Failed.store(true);
 	}
 	else
 	{
-		AppState->Ui.Download.Succeeded.store(true);
+		remove(DestPath.c_str());
+		if (rename(PartPath.c_str(), DestPath.c_str()) != 0)
+		{
+			remove(PartPath.c_str());
+			AppState->Ui.Download.Failed.store(true);
+		}
+		else
+		{
+			AppState->Ui.Download.Succeeded.store(true);
+		}
 	}
 
 	AppState->Ui.Download.IsRunning.store(false);
@@ -170,8 +181,10 @@ linux_download_thread(GlobalState *AppState, std::string Url, std::string DestPa
 	AppState->Ui.Download.DownloadedBytes.store(0);
 	AppState->Ui.Download.TotalBytes.store(ExpectedSize);
 
+	std::string PartPath = DestPath + ".part";
+
 	pid_t Pid = -1;
-	if (!linux_spawn_download(Url, DestPath, &Pid))
+	if (!linux_spawn_download(Url, PartPath, &Pid))
 	{
 		AppState->Ui.Download.Failed.store(true);
 		AppState->Ui.Download.IsRunning.store(false);
@@ -208,7 +221,7 @@ linux_download_thread(GlobalState *AppState, std::string Url, std::string DestPa
 		}
 
 		struct stat St;
-		if (stat(DestPath.c_str(), &St) == 0 && S_ISREG(St.st_mode))
+		if (stat(PartPath.c_str(), &St) == 0 && S_ISREG(St.st_mode))
 		{
 			AppState->Ui.Download.DownloadedBytes.store(St.st_size);
 		}
@@ -221,14 +234,23 @@ linux_download_thread(GlobalState *AppState, std::string Url, std::string DestPa
 	bool Success = !Canceled && WIFEXITED(Status) && WEXITSTATUS(Status) == 0;
 	if (!Success)
 	{
-		remove(DestPath.c_str());
+		remove(PartPath.c_str());
 		AppState->Ui.Download.Failed.store(true);
 	}
 	else
 	{
-		struct stat St;
-		if (stat(DestPath.c_str(), &St) == 0) AppState->Ui.Download.DownloadedBytes.store(St.st_size);
-		AppState->Ui.Download.Succeeded.store(true);
+		remove(DestPath.c_str());
+		if (rename(PartPath.c_str(), DestPath.c_str()) != 0)
+		{
+			remove(PartPath.c_str());
+			AppState->Ui.Download.Failed.store(true);
+		}
+		else
+		{
+			struct stat St;
+			if (stat(DestPath.c_str(), &St) == 0) AppState->Ui.Download.DownloadedBytes.store(St.st_size);
+			AppState->Ui.Download.Succeeded.store(true);
+		}
 	}
 
 	AppState->Ui.Download.IsRunning.store(false);

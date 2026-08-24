@@ -71,6 +71,7 @@ app_initialize_runtime(GlobalState *AppState, PlatformWindowHandle OwnWindow)
 	query_vad_model_path(AppState);
 	query_audio_input_devices(AppState);
 	query_inference_devices(AppState);
+	cleanup_partial_model_downloads();
 	query_available_stt_models(AppState);
 	query_whisper_thread_count(AppState);
 	query_hotkey_settings(AppState);

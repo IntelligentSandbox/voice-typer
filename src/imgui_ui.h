@@ -879,7 +879,9 @@ render_crash_dialog_ui(GlobalState *AppState)
 		return;
 	}
 
-	ImGui::TextWrapped(
+	float WrapW = ImGui::GetFontSize() * 26.0f;
+	ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + WrapW);
+	ImGui::TextUnformatted(
 		"VoiceTyper appears to have crashed on a previous run. "
 		"A crash report has been saved next to the executable that the developer "
 		"can use to diagnose the problem.");
@@ -891,14 +893,14 @@ render_crash_dialog_ui(GlobalState *AppState)
 
 	for (const std::string &Path : AppState->Ui.PendingCrashDumps)
 	{
-		ImGui::TextWrapped("%s", Path.c_str());
+		ImGui::TextUnformatted(Path.c_str());
 	}
+	ImGui::PopTextWrapPos();
 
 	ImGui::Separator();
 
-	float AvailWidth = ImGui::GetContentRegionAvail().x;
 	float Spacing = ImGui::GetStyle().ItemSpacing.x;
-	float BtnWidth = (AvailWidth - Spacing) / 2;
+	float BtnWidth = (WrapW - Spacing) / 2;
 	ImVec2 BtnSize = ImVec2(BtnWidth, 40);
 
 	if (colored_button("Open Folder", BtnSize, BUTTON_COLOR_GREY))
@@ -1300,9 +1302,10 @@ render_download_modal(GlobalState *AppState)
 		bool Cancel = D->CancelRequested.load();
 		D->JustFinished = false;
 
+		if (D->CurrentModelName != VAD_MODEL_DISPLAY_NAME) query_available_stt_models(AppState);
+
 		if (Succ)
 		{
-			if (D->CurrentModelName != VAD_MODEL_DISPLAY_NAME) query_available_stt_models(AppState);
 			std::string Msg = std::string("Downloaded ") + D->CurrentModelName;
 			show_success_toast(AppState, Msg.c_str());
 		}
@@ -1355,7 +1358,8 @@ render_download_modal(GlobalState *AppState)
 	bool Open = true;
 	if (ImGui::BeginPopupModal("Download Models", &Open, ImGuiWindowFlags_AlwaysAutoResize))
 	{
-		modal_close_on_click_outside(&D->IsModalOpen);
+		if (!ImGui::IsPopupOpen("Overwrite Model?"))
+			modal_close_on_click_outside(&D->IsModalOpen);
 		bool Running = D->IsRunning.load();
 		if (!Running) D->ModalWidth = ImGui::GetWindowWidth();
 		if (Running)
@@ -1523,12 +1527,14 @@ render_download_modal(GlobalState *AppState)
 			ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 		{
 			ImGui::Text("Model '%s' already exists.", D->PendingModelName.c_str());
-			ImGui::TextWrapped("Downloading will overwrite the existing weights file. This cannot be undone.");
+			float WrapW = ImGui::GetFontSize() * 26.0f;
+			ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + WrapW);
+			ImGui::TextUnformatted("Downloading will overwrite the existing weights file. This cannot be undone.");
+			ImGui::PopTextWrapPos();
 			ImGui::Spacing();
 
-			float AvailWidth = ImGui::GetContentRegionAvail().x;
 			float Spacing = ImGui::GetStyle().ItemSpacing.x;
-			float BtnW = (AvailWidth - Spacing) * 0.5f;
+			float BtnW = (WrapW - Spacing) * 0.5f;
 
 			if (ImGui::Button("Overwrite", ImVec2(BtnW, 0)))
 			{

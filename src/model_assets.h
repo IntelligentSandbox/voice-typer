@@ -29,6 +29,22 @@ vad_model_installed(GlobalState *AppState)
 }
 
 inline void
+cleanup_partial_model_downloads()
+{
+	const char *DirNames[] = { "stt_models", "vad_models" };
+	for (const char *DirName : DirNames)
+	{
+		std::string Dir = platform_join_path(platform_get_exe_dir(), DirName);
+		std::vector<PlatformFileInfo> Files = platform_list_files(Dir);
+		for (const PlatformFileInfo &File : Files)
+		{
+			if (File.Name.size() < 5 || File.Name.substr(File.Name.size() - 5) != ".part") continue;
+			remove(platform_join_path(Dir, File.Name).c_str());
+		}
+	}
+}
+
+inline void
 query_available_stt_models(GlobalState *AppState)
 {
 	AppState->STTModelNames.clear();
