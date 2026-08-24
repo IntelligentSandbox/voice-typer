@@ -232,7 +232,7 @@ render_update_modal(GlobalState *AppState)
 	ImVec2 Display = ImGui::GetIO().DisplaySize;
 	float WinW = Display.x * 0.6f;
 	if (WinW > 560.0f) WinW = 560.0f;
-	ImGui::SetNextWindowSize(ImVec2(WinW, 0.0f), ImGuiCond_Appearing);
+	ImGui::SetNextWindowSizeConstraints(ImVec2(WinW, 0.0f), ImVec2(Display.x * 0.95f, Display.y * 0.95f));
 	ImGui::SetNextWindowPos(ImVec2(Display.x * 0.5f, Display.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 	ImGui::SetNextWindowBgAlpha(1.0f);
 
