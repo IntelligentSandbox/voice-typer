@@ -932,8 +932,8 @@ format_timing_ms(double Ms)
 	if (Ms < 0.0) return "\xe2\x80\x94";
 
 	char Buf[64];
-	if (Ms < 1000.0) snprintf(Buf, sizeof(Buf), "%.4f ms", Ms);
-	else snprintf(Buf, sizeof(Buf), "%.4f s", Ms / 1000.0);
+	if (Ms < 1000.0) snprintf(Buf, sizeof(Buf), "%.2f ms", Ms);
+	else snprintf(Buf, sizeof(Buf), "%.2f s", Ms / 1000.0);
 	return std::string(Buf);
 }
 
