@@ -1560,7 +1560,8 @@ render_main_ui(GlobalState *AppState, ImGuiIO &Io)
 	ImGui::Begin(
 		"VoiceTyper", nullptr,
 		ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_NoBringToFrontOnFocus);
 
 	const float Padding = 16.0f;
 	const float ColumnWidth = (Io.DisplaySize.x - Padding * 3.0f) * 0.5f;
