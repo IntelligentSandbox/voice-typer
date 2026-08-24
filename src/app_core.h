@@ -49,9 +49,6 @@ app_initialize_runtime(GlobalState *AppState, PlatformWindowHandle OwnWindow)
 	AppState->Ui.IsCrashDialogOpen = false;
 	AppState->Ui.CrashDialogOpened = false;
 	AppState->Ui.PendingCrashDumps.clear();
-	AppState->Ui.TranscribedTextSelectAnchor = -1;
-	AppState->Ui.TranscribedTextSelectFocus = -1;
-	AppState->Ui.TranscribedTextSelecting = false;
 	AppState->InferenceDevicePrefersCpu = false;
 	AppState->PlayRecordSound = false;
 	AppState->StartSoundFreq = SOUND_DEFAULT_START_FREQ;
@@ -59,7 +56,6 @@ app_initialize_runtime(GlobalState *AppState, PlatformWindowHandle OwnWindow)
 	AppState->CancelSoundFreq = SOUND_DEFAULT_CANCEL_FREQ;
 	AppState->UseCharByCharInjection = false;
 	AppState->CopyToClipboardWhenNoTarget = false;
-	AppState->ShowTranscribedTextConfidence = false;
 	AppState->UiFontSize = 18;
 	AppState->Ui.FontReloadRequested = false;
 	AppState->RecordHotkeyMode = default_recording_hotkey_mode();

@@ -639,12 +639,6 @@ render_settings_panel(GlobalState *AppState)
 		save_bool_setting("copy_to_clipboard_when_no_target", AppState->CopyToClipboardWhenNoTarget);
 	}
 
-	if (ImGui::Checkbox("Show word confidence colors in the Transcribed Text box",
-		&AppState->ShowTranscribedTextConfidence))
-	{
-		save_bool_setting("show_transcribed_text_confidence", AppState->ShowTranscribedTextConfidence);
-	}
-
 	bool UseToggleMode = (AppState->RecordHotkeyMode == RECORDING_HOTKEY_TOGGLE);
 	if (ImGui::Checkbox("Use toggle mode (press key to start/stop, instead of holding)", &UseToggleMode))
 	{
@@ -1160,16 +1154,14 @@ transcribed_word_confidence_color(float Confidence)
 	return ImVec4(0.92f, 0.35f, 0.35f, 1.0f);
 }
 
-// Map a screen position onto a word index of the laid-out confidence text.
-// Words on the same wrapped line share Min.y; positions above/below the text
-// clamp to the first/last word. Returns -1 when there are no words.
-static int
-transcribed_text_hit_test(const std::vector<ImVec4> &WordRects, const ImVec2 &Pos)
+// True when a screen position lies over the laid-out transcription text,
+// i.e. within the horizontal span of any wrapped line of words.
+static bool
+transcribed_text_pos_over_text(const std::vector<ImVec4> &WordRects, const ImVec2 &Pos)
 {
 	const int Count = (int)WordRects.size();
-	if (Count == 0) return -1;
-	if (Pos.y < WordRects[0].y) return 0;
-	if (Pos.y >= WordRects[Count - 1].y) return Count - 1;
+	if (Count == 0) return false;
+	if (Pos.y < WordRects[0].y || Pos.y > WordRects[Count - 1].w) return false;
 
 	int LinePivot = 0;
 	for (int i = 0; i < Count; i++)
@@ -1182,56 +1174,26 @@ transcribed_text_hit_test(const std::vector<ImVec4> &WordRects, const ImVec2 &Po
 	int LineEnd = LinePivot;
 	while (LineEnd + 1 < Count && ImFabs(WordRects[LineEnd + 1].y - LineY) < 0.5f) LineEnd++;
 
-	if (Pos.x <= WordRects[LineBegin].x) return LineBegin;
-	for (int i = LineBegin; i <= LineEnd; i++)
-	{
-		if (Pos.x < WordRects[i].z) return i;
-	}
-	return LineEnd;
-}
-
-static bool
-transcribed_text_word_selected(const UiRuntimeState *Ui, int WordIndex)
-{
-	if (Ui->TranscribedTextSelectAnchor < 0 || Ui->TranscribedTextSelectFocus < 0) return false;
-
-	int A = Ui->TranscribedTextSelectAnchor;
-	int B = Ui->TranscribedTextSelectFocus;
-	if (A > B)
-	{
-		int T = A;
-		A = B;
-		B = T;
-	}
-	return WordIndex >= A && WordIndex <= B;
+	return Pos.x >= WordRects[LineBegin].x && Pos.x <= WordRects[LineEnd].z &&
+		Pos.y >= WordRects[LineBegin].y && Pos.y <= WordRects[LineBegin].w;
 }
 
 static void
-transcribed_text_copy_selection(UiRuntimeState *Ui)
+transcribed_text_copy_all(GlobalState *AppState)
 {
-	if (Ui->TranscribedTextSelectAnchor < 0 || Ui->TranscribedTextSelectFocus < 0) return;
+	UiRuntimeState *Ui = &AppState->Ui;
+	if (Ui->TranscribedTextBoxBuffer.empty()) return;
 
-	int A = Ui->TranscribedTextSelectAnchor;
-	int B = Ui->TranscribedTextSelectFocus;
-	if (A > B)
-	{
-		int T = A;
-		A = B;
-		B = T;
-	}
-	if (B >= (int)Ui->TranscribedTextBoxWords.size()) return;
-
-	std::string Text;
-	for (int i = A; i <= B; i++)
-	{
-		Text += Ui->TranscribedTextBoxWords[i].Text;
-	}
-
+	std::string Text(Ui->TranscribedTextBoxBuffer.data());
 	size_t Start = Text.find_first_not_of(" \t\r\n");
 	size_t End = Text.find_last_not_of(" \t\r\n");
 	if (Start == std::string::npos) return;
 	Text = Text.substr(Start, End - Start + 1);
-	if (!Text.empty()) ImGui::SetClipboardText(Text.c_str());
+	if (!Text.empty())
+	{
+		ImGui::SetClipboardText(Text.c_str());
+		show_success_toast(AppState, "Transcription copied to clipboard");
+	}
 }
 
 static void
@@ -1245,10 +1207,6 @@ render_transcribed_text_box(GlobalState *AppState)
 		{
 			Ui->TranscribedTextBoxSerial = Ui->TranscribedTextSerial;
 			Ui->TranscribedTextBoxWords = Ui->TranscribedTextWords;
-			if (Ui->TranscribedTextSelectAnchor >= (int)Ui->TranscribedTextBoxWords.size())
-				Ui->TranscribedTextSelectAnchor = (int)Ui->TranscribedTextBoxWords.size() - 1;
-			if (Ui->TranscribedTextSelectFocus >= (int)Ui->TranscribedTextBoxWords.size())
-				Ui->TranscribedTextSelectFocus = (int)Ui->TranscribedTextBoxWords.size() - 1;
 
 			Ui->TranscribedTextBoxBuffer.clear();
 			for (const TranscribedWord &Word : Ui->TranscribedTextBoxWords)
@@ -1267,16 +1225,6 @@ render_transcribed_text_box(GlobalState *AppState)
 
 	const float BoxHeight = ImGui::GetTextLineHeightWithSpacing() * 6.0f +
 		ImGui::GetStyle().FramePadding.y * 2.0f;
-
-	if (!AppState->ShowTranscribedTextConfidence)
-	{
-		ImGui::InputTextMultiline("##TranscribedText",
-			Ui->TranscribedTextBoxBuffer.data(),
-			Ui->TranscribedTextBoxBuffer.size(),
-			ImVec2(-1.0f, BoxHeight),
-			ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_WordWrap);
-		return;
-	}
 
 	std::vector<ImVec4> WordRects;
 	WordRects.reserve(Ui->TranscribedTextBoxWords.size());
@@ -1301,21 +1249,11 @@ render_transcribed_text_box(GlobalState *AppState)
 		float WrapRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
 		float LineEndX = ImGui::GetCursorPosX();
 		bool LineStarted = false;
-		int WordIndex = 0;
 		for (const TranscribedWord &Word : Ui->TranscribedTextBoxWords)
 		{
 			float WordW = ImGui::CalcTextSize(Word.Text.c_str()).x;
 			if (LineStarted && LineEndX + WordW <= WrapRight) ImGui::SameLine(0.0f, 0.0f);
 			else LineEndX = ImGui::GetCursorPosX();
-
-			if (transcribed_text_word_selected(Ui, WordIndex))
-			{
-				ImVec2 RectMin = ImGui::GetCursorScreenPos();
-				ImGui::GetWindowDrawList()->AddRectFilled(
-					ImVec2(RectMin.x, RectMin.y),
-					ImVec2(RectMin.x + WordW, RectMin.y + ImGui::GetTextLineHeight()),
-					ImGui::GetColorU32(ImGuiCol_TextSelectedBg));
-			}
 
 			ImGui::PushStyleColor(ImGuiCol_Text, transcribed_word_confidence_color(Word.Confidence));
 			ImGui::TextUnformatted(Word.Text.c_str());
@@ -1327,46 +1265,17 @@ render_transcribed_text_box(GlobalState *AppState)
 
 			LineEndX += WordW;
 			LineStarted = true;
-			WordIndex++;
 		}
 		ImGui::PopStyleVar();
 
-		if (MouseInBox && WordCount > 0) ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
+		const bool MouseOverText = MouseInBox && WordCount > 0 &&
+			transcribed_text_pos_over_text(WordRects, Mouse);
 
-		if (MouseInBox && ImGui::IsMouseClicked(0))
+		if (MouseOverText) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+		if (MouseOverText && ImGui::IsMouseClicked(0))
 		{
-			int Hit = transcribed_text_hit_test(WordRects, Mouse);
-			if (ImGui::GetIO().KeyShift && Ui->TranscribedTextSelectAnchor >= 0 && Hit >= 0)
-			{
-				Ui->TranscribedTextSelectFocus = Hit;
-			}
-			else
-			{
-				Ui->TranscribedTextSelectAnchor = Hit;
-				Ui->TranscribedTextSelectFocus = Hit;
-			}
-			Ui->TranscribedTextSelecting = (Hit >= 0);
-		}
-
-		if (Ui->TranscribedTextSelecting && !ImGui::IsMouseDown(0)) Ui->TranscribedTextSelecting = false;
-
-		if (Ui->TranscribedTextSelecting)
-		{
-			int Hit = transcribed_text_hit_test(WordRects, Mouse);
-			if (Hit >= 0) Ui->TranscribedTextSelectFocus = Hit;
-		}
-
-		if (MouseInBox && WordCount > 0)
-		{
-			if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A))
-			{
-				Ui->TranscribedTextSelectAnchor = 0;
-				Ui->TranscribedTextSelectFocus = WordCount - 1;
-			}
-			if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_C))
-			{
-				transcribed_text_copy_selection(Ui);
-			}
+			transcribed_text_copy_all(AppState);
 		}
 	}
 	ImGui::EndChild();
