@@ -39,9 +39,17 @@ automatically — publish from the GitHub UI. `--ccache` reuses object files acr
 CUDA nix rebuilds (needs a ccache dir nixbld can write; default
 /var/cache/voicetyper-ccache, or $CCACHE_DIR).
 
-For a quick dev build without packaging, invoke cmake directly, e.g.:
-    cmake -S . -B build/cpu -G "Visual Studio 17 2022" -A x64
-    cmake --build build/cpu --config Release
+For a quick dev build without packaging, invoke cmake directly — always use the
+Ninja generator (never "Visual Studio 17 2022", which is many times slower).
+Ninja needs the MSVC environment, so drive it through vcvars via a batch file
+(calling vcvars64.bat inline from git bash mangles the quoting):
+    build/cpu          -> cmake -S . -B build/cpu -G Ninja
+    build/cuda-plugin  -> cmake -S . -B build/cuda-plugin -G Ninja -DVOICETYPER_BUILD_CUDA_PLUGIN=ON
+Both dirs already hold Ninja caches; reconfigure in place rather than creating
+new build dirs. Then, from a batch file:
+    call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+    cmake --build build/cpu && cmake --build build/cuda-plugin
+(Without vcvars, linking fails with `LNK1181: cannot open input file 'kernel32.lib'`.)
 
 On NixOS the individual flake packages can still be built directly for dev:
     nix build .#default | .#cuda | .#portable-x11 | .#portable-wayland |
