@@ -80,6 +80,14 @@ platform_get_foreground_window(PlatformRuntimeState *Platform)
 	return nullptr;
 }
 
+inline bool
+platform_window_has_focused_text_input(PlatformRuntimeState *Platform, void *Window)
+{
+	(void)Platform;
+	(void)Window;
+	return true;
+}
+
 inline void
 platform_set_taskbar_icon(void *Window, const char *PngPath)
 {

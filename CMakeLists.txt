@@ -220,9 +220,9 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 )
 
 # The Windows sources link extra system libs via MSVC-only #pragma comment(lib)
-# directives (dwmapi, winmm, ole32, propsys, winhttp, dbghelp, gdi32, imm32);
-# list them explicitly so mingw cross-builds link too. MSVC links them twice
-# (pragma + here), which is harmless.
+# directives (dwmapi, winmm, ole32, propsys, winhttp, dbghelp, gdi32, imm32,
+# uiautomationcore); list them explicitly so mingw cross-builds link too. MSVC
+# links them twice (pragma + here), which is harmless.
 target_link_libraries(${PROJECT_NAME} PRIVATE
 	whisper
 	$<$<PLATFORM_ID:Windows>:d3d11>
@@ -236,6 +236,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 	$<$<PLATFORM_ID:Windows>:dbghelp>
 	$<$<PLATFORM_ID:Windows>:gdi32>
 	$<$<PLATFORM_ID:Windows>:imm32>
+	$<$<PLATFORM_ID:Windows>:uiautomationcore>
 )
 
 if(UNIX AND NOT APPLE)
