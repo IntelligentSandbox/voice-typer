@@ -1353,10 +1353,10 @@ render_download_modal(GlobalState *AppState)
 	if (D->ModalWidth > MinW && D->ModalWidth <= Display.x * 0.95f) MinW = D->ModalWidth;
 	ImGui::SetNextWindowBgAlpha(1.0f);
 	ImGui::SetNextWindowSizeConstraints(ImVec2(MinW, 0.0f), ImVec2(Display.x * 0.95f, Display.y * 0.95f));
-	ImGui::SetNextWindowPos(ImVec2(Display.x * 0.5f, Display.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(ImVec2(Display.x * 0.5f, Display.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
 	bool Open = true;
-	if (ImGui::BeginPopupModal("Download Models", &Open, ImGuiWindowFlags_AlwaysAutoResize))
+	if (ImGui::BeginPopupModal("Download Models", &Open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 	{
 		if (!ImGui::IsPopupOpen("Overwrite Model?"))
 			modal_close_on_click_outside(&D->IsModalOpen);
