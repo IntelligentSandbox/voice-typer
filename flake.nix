@@ -45,6 +45,7 @@
             libxi
             libxinerama
             libxrandr
+            libxtst
           ];
 
           # X11/ALSA client libs that the portable x11 bundles ship next to the
@@ -60,6 +61,7 @@
             libxi
             libxinerama
             libxrandr
+            libxtst
             libxscrnsaver
             libxcb
             alsa-lib
@@ -374,6 +376,7 @@
                 libxi
                 libxinerama
                 libxrandr
+                libxtst
               ];
 
               cmakeBuildType = "Release";
@@ -442,6 +445,7 @@
                   libxi
                   libxinerama
                   libxrandr
+                  libxtst
                   cudaPackages.cuda_cudart
                   cudaPackages.libcublas
                 ];
@@ -496,12 +500,13 @@
           # launcher bypasses the kernel's PT_INTERP lookup entirely).
           #
           # { wayland }: selects the SDL2 video-driver flavour — false bundles
-          # the X11 build (libSDL2 + its X11/ALSA client libs), true bundles
-          # the Wayland build (libwayland-client/cursor/egl + libxkbcommon +
-          # ALSA). The app itself is identical either way: it renders via
-          # SDL's software renderer (imgui_impl_sdlrenderer2) and Linux text
-          # insertion is clipboard-based, so no display-server-specific code
-          # is compiled into the app.
+          # the X11 build (libSDL2 + its X11/ALSA client libs + libXtst for
+          # the app's dlopen'd X11 text injection), true bundles the Wayland
+          # build (libwayland-client/cursor/egl + libxkbcommon + ALSA). The
+          # app itself is identical either way: it renders via SDL's software
+          # renderer (imgui_impl_sdlrenderer2) and resolves libX11/libXtst
+          # via dlopen at runtime, so the wayland flavour (which ships no X11
+          # libs) simply keeps clipboard-only text insertion.
           #
           # { cuda }: additionally bundles a cuda/ subdir holding the dlopened
           # CUDA backend (libggml-cuda.so) and its cublas/cudart runtime — the
@@ -838,6 +843,7 @@
               libxi
               libxinerama
               libxrandr
+              libxtst
               ninja
               nixfmt
               pkg-config

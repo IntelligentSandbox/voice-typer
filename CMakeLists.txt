@@ -139,6 +139,7 @@ if(WIN32)
 elseif(UNIX AND NOT APPLE)
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+	pkg_check_modules(X11 x11)
 	list(APPEND IMGUI_SOURCES
 		${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
 		${IMGUI_DIR}/backends/imgui_impl_sdlrenderer2.cpp
@@ -244,6 +245,10 @@ if(UNIX AND NOT APPLE)
 		PkgConfig::SDL2
 		${CMAKE_DL_LIBS}
 	)
+	if(X11_FOUND)
+		target_include_directories(${PROJECT_NAME} PRIVATE ${X11_INCLUDE_DIRS})
+		target_compile_definitions(${PROJECT_NAME} PRIVATE VOICETYPER_HAVE_X11=1)
+	endif()
 endif()
 
 if(VOICETYPER_BUILD_BENCH)
