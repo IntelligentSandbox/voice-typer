@@ -109,6 +109,12 @@ struct UpdateAssetInfo
 	int64_t Size;
 };
 
+struct UpdateChangelogEntry
+{
+	std::string Version;
+	std::string Notes;
+};
+
 struct UpdateState
 {
 	std::atomic<bool> CheckRunning;
@@ -127,6 +133,7 @@ struct UpdateState
 	std::string LatestVersion;
 	std::string ReleaseUrl;
 	std::vector<UpdateAssetInfo> Assets;
+	std::vector<UpdateChangelogEntry> NewerReleases;
 	bool IsNewerAvailable;
 	bool CheckJustFinished;
 	bool DownloadJustFinished;
@@ -136,6 +143,7 @@ struct UpdateState
 	std::string StagingLatestVersion;
 	std::string StagingReleaseUrl;
 	std::vector<UpdateAssetInfo> StagingAssets;
+	std::vector<UpdateChangelogEntry> StagingNewerReleases;
 	bool StagingIsNewerAvailable;
 	bool StagingCheckSucceeded;
 	bool ThreadIsCheck;

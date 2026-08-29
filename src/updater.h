@@ -26,9 +26,9 @@
 	#define VOICETYPER_VERSION_FULL "0.0.0-unknown"
 #endif
 
-#define UPDATER_GITHUB_REPO     "IntelligentSandbox/VoiceTyper"
-#define UPDATER_API_LATEST_URL  "https://api.github.com/repos/" UPDATER_GITHUB_REPO "/releases/latest"
-#define UPDATER_RELEASES_URL    "https://github.com/" UPDATER_GITHUB_REPO "/releases/latest"
+#define UPDATER_GITHUB_REPO       "IntelligentSandbox/VoiceTyper"
+#define UPDATER_API_RELEASES_URL "https://api.github.com/repos/" UPDATER_GITHUB_REPO "/releases?per_page=100"
+#define UPDATER_RELEASES_URL     "https://github.com/" UPDATER_GITHUB_REPO "/releases/latest"
 
 struct UpdaterVersion
 {
@@ -132,6 +132,56 @@ updater_json_read_string(const std::string &Json, size_t *Pos, std::string *Out)
 			{
 				Out->push_back('\t');
 			}
+			else if (Esc == 'r')
+			{
+				Out->push_back('\r');
+			}
+			else if (Esc == 'b')
+			{
+				Out->push_back('\b');
+			}
+			else if (Esc == 'f')
+			{
+				Out->push_back('\f');
+			}
+			else if (Esc == 'u' && *Pos + 4 <= Json.size())
+			{
+				unsigned int Code = 0;
+				for (int i = 0; i < 4; i++)
+				{
+					char Hex = Json[*Pos + i];
+					unsigned int Digit;
+					if (Hex >= '0' && Hex <= '9') Digit = (unsigned int)(Hex - '0');
+					else if (Hex >= 'a' && Hex <= 'f') Digit = (unsigned int)(Hex - 'a' + 10);
+					else if (Hex >= 'A' && Hex <= 'F') Digit = (unsigned int)(Hex - 'A' + 10);
+					else Digit = 0xFFFFFFFFu;
+					Code = (Code << 4) | Digit;
+				}
+
+				if (Code == 0xFFFFFFFFu)
+				{
+					Out->push_back(Esc);
+				}
+				else
+				{
+					*Pos += 4;
+					if (Code < 0x80)
+					{
+						Out->push_back((char)Code);
+					}
+					else if (Code < 0x800)
+					{
+						Out->push_back((char)(0xC0 | (Code >> 6)));
+						Out->push_back((char)(0x80 | (Code & 0x3F)));
+					}
+					else
+					{
+						Out->push_back((char)(0xE0 | (Code >> 12)));
+						Out->push_back((char)(0x80 | ((Code >> 6) & 0x3F)));
+						Out->push_back((char)(0x80 | (Code & 0x3F)));
+					}
+				}
+			}
 			else
 			{
 				Out->push_back(Esc);
@@ -144,6 +194,24 @@ updater_json_read_string(const std::string &Json, size_t *Pos, std::string *Out)
 		Out->push_back(Ch);
 	}
 
+	return false;
+}
+
+static bool
+updater_json_read_bool(const std::string &Json, size_t *Pos, bool *Out)
+{
+	if (Json.compare(*Pos, 4, "true") == 0)
+	{
+		*Out = true;
+		*Pos += 4;
+		return true;
+	}
+	if (Json.compare(*Pos, 5, "false") == 0)
+	{
+		*Out = false;
+		*Pos += 5;
+		return true;
+	}
 	return false;
 }
 
@@ -164,21 +232,46 @@ updater_json_find_key(const std::string &Json, size_t *Pos, size_t Limit, const 
 	return true;
 }
 
-static bool
-updater_parse_release_json(const std::string &Body, std::string *TagName, std::string *HtmlUrl,
-	std::vector<UpdateAssetInfo> *Assets)
+static size_t
+updater_json_object_end(const std::string &Json, size_t Pos)
 {
-	size_t Pos = 0;
-	if (!updater_json_find_key(Body, &Pos, Body.size(), "tag_name")) return false;
-	if (!updater_json_read_string(Body, &Pos, TagName)) return false;
+	int Depth = 0;
+	bool InString = false;
+	for (size_t At = Pos; At < Json.size(); At++)
+	{
+		char Ch = Json[At];
+		if (InString)
+		{
+			if (Ch == '\\') At++;
+			else if (Ch == '"') InString = false;
+			continue;
+		}
 
-	Pos = 0;
-	if (!updater_json_find_key(Body, &Pos, Body.size(), "html_url")) return false;
-	if (!updater_json_read_string(Body, &Pos, HtmlUrl)) return false;
+		if (Ch == '"') InString = true;
+		else if (Ch == '{') Depth++;
+		else if (Ch == '}')
+		{
+			Depth--;
+			if (Depth == 0) return At;
+		}
+	}
+	return std::string::npos;
+}
 
-	Pos = 0;
-	if (!updater_json_find_key(Body, &Pos, Body.size(), "assets")) return false;
-	Pos = updater_skip_ws(Body, Pos);
+struct UpdateReleaseInfo
+{
+	std::string TagName;
+	std::string HtmlUrl;
+	std::string Body;
+	bool IsDraft;
+	bool IsPrerelease;
+	std::vector<UpdateAssetInfo> Assets;
+};
+
+static bool
+updater_parse_releases_json(const std::string &Body, std::vector<UpdateReleaseInfo> *Out)
+{
+	size_t Pos = updater_skip_ws(Body, 0);
 	if (Pos >= Body.size() || Body[Pos] != '[') return false;
 	Pos++;
 
@@ -194,52 +287,100 @@ updater_parse_release_json(const std::string &Body, std::string *TagName, std::s
 		}
 		if (Body[Pos] != '{') return false;
 
-		size_t ObjectStart = Pos;
-		int Depth = 0;
-		size_t ObjectEnd = Pos;
-		while (ObjectEnd < Body.size())
+		size_t ObjectEnd = updater_json_object_end(Body, Pos);
+		if (ObjectEnd == std::string::npos) return false;
+
+		UpdateReleaseInfo Release;
+		size_t Field = Pos;
+		if (updater_json_find_key(Body, &Field, ObjectEnd, "tag_name"))
 		{
-			if (Body[ObjectEnd] == '{')
+			updater_json_read_string(Body, &Field, &Release.TagName);
+		}
+
+		Field = Pos;
+		if (updater_json_find_key(Body, &Field, ObjectEnd, "html_url"))
+		{
+			updater_json_read_string(Body, &Field, &Release.HtmlUrl);
+		}
+
+		Field = Pos;
+		if (updater_json_find_key(Body, &Field, ObjectEnd, "body"))
+		{
+			updater_json_read_string(Body, &Field, &Release.Body);
+		}
+
+		Field = Pos;
+		if (updater_json_find_key(Body, &Field, ObjectEnd, "draft"))
+		{
+			updater_json_read_bool(Body, &Field, &Release.IsDraft);
+		}
+
+		Field = Pos;
+		if (updater_json_find_key(Body, &Field, ObjectEnd, "prerelease"))
+		{
+			updater_json_read_bool(Body, &Field, &Release.IsPrerelease);
+		}
+
+		Field = Pos;
+		if (updater_json_find_key(Body, &Field, ObjectEnd, "assets"))
+		{
+			size_t AssetPos = updater_skip_ws(Body, Field);
+			if (AssetPos < Body.size() && Body[AssetPos] == '[')
 			{
-				Depth++;
+				AssetPos++;
+				for (;;)
+				{
+					AssetPos = updater_skip_ws(Body, AssetPos);
+					if (AssetPos >= Body.size()) return false;
+					if (Body[AssetPos] == ']') break;
+					if (Body[AssetPos] == ',')
+					{
+						AssetPos++;
+						continue;
+					}
+					if (Body[AssetPos] != '{') return false;
+
+					size_t AssetObjectEnd = updater_json_object_end(Body, AssetPos);
+					if (AssetObjectEnd == std::string::npos) return false;
+
+					UpdateAssetInfo Asset;
+					size_t AssetField = AssetPos;
+					if (updater_json_find_key(Body, &AssetField, AssetObjectEnd, "name"))
+					{
+						updater_json_read_string(Body, &AssetField, &Asset.Name);
+					}
+
+					AssetField = AssetPos;
+					if (updater_json_find_key(Body, &AssetField, AssetObjectEnd, "browser_download_url"))
+					{
+						updater_json_read_string(Body, &AssetField, &Asset.Url);
+					}
+
+					AssetField = AssetPos;
+					if (updater_json_find_key(Body, &AssetField, AssetObjectEnd, "size"))
+					{
+						Asset.Size = (int64_t)strtoll(Body.c_str() + AssetField, nullptr, 10);
+					}
+
+					if (!Asset.Name.empty() && !Asset.Url.empty())
+					{
+						Release.Assets.push_back(Asset);
+					}
+
+					AssetPos = AssetObjectEnd + 1;
+				}
 			}
-			else if (Body[ObjectEnd] == '}')
-			{
-				Depth--;
-				if (Depth == 0) break;
-			}
-			ObjectEnd++;
-		}
-		if (ObjectEnd >= Body.size() || Depth != 0) return false;
-
-		UpdateAssetInfo Asset;
-		size_t Field = ObjectStart;
-		if (updater_json_find_key(Body, &Field, ObjectEnd, "name"))
-		{
-			updater_json_read_string(Body, &Field, &Asset.Name);
 		}
 
-		Field = ObjectStart;
-		if (updater_json_find_key(Body, &Field, ObjectEnd, "browser_download_url"))
+		if (!Release.TagName.empty())
 		{
-			updater_json_read_string(Body, &Field, &Asset.Url);
-		}
-
-		Field = ObjectStart;
-		if (updater_json_find_key(Body, &Field, ObjectEnd, "size"))
-		{
-			Asset.Size = (int64_t)strtoll(Body.c_str() + Field, nullptr, 10);
-		}
-
-		if (!Asset.Name.empty() && !Asset.Url.empty())
-		{
-			Assets->push_back(Asset);
+			Out->push_back(std::move(Release));
 		}
 
 		Pos = ObjectEnd + 1;
 	}
 
-	return true;
+	return !Out->empty();
 }
 
 #ifdef _WIN32
@@ -391,6 +532,64 @@ updater_fetch_string_linux(const std::string &Url, std::string *OutBody)
 }
 #endif
 
+static bool
+updater_is_hex_digit(char Ch)
+{
+	return (Ch >= '0' && Ch <= '9') || (Ch >= 'a' && Ch <= 'f') || (Ch >= 'A' && Ch <= 'F');
+}
+
+static void
+updater_strip_trailing_commit_hash(std::string *Line)
+{
+	if (Line->size() < 8 || (*Line)[Line->size() - 1] != ')') return;
+
+	size_t HashEnd = Line->size() - 2;
+	size_t HashStart = HashEnd + 1;
+	for (size_t At = HashEnd + 1; At-- > 1; )
+	{
+		char Ch = (*Line)[At];
+		if (updater_is_hex_digit(Ch))
+		{
+			HashStart = At;
+			continue;
+		}
+
+		size_t HashLength = HashEnd - HashStart + 1;
+		if (Ch == '(' && (*Line)[At - 1] == ' ' && HashLength >= 4 && HashLength <= 40)
+		{
+			Line->resize(At - 1);
+		}
+		return;
+	}
+}
+
+static std::string
+updater_clean_release_notes(const std::string &Body)
+{
+	std::string Cleaned;
+	size_t Pos = 0;
+	while (Pos <= Body.size())
+	{
+		size_t Nl = Body.find('\n', Pos);
+		size_t LineEnd = (Nl == std::string::npos) ? Body.size() : Nl;
+		std::string Line = Body.substr(Pos, LineEnd - Pos);
+		if (!Line.empty() && Line.back() == '\r') Line.pop_back();
+
+		bool IsChangesSinceHeader = Line.compare(0, 13, "Changes since") == 0 && Line.back() == ':';
+		if (!IsChangesSinceHeader && !Line.empty())
+		{
+			updater_strip_trailing_commit_hash(&Line);
+			if (!Cleaned.empty()) Cleaned.push_back('\n');
+			Cleaned += Line;
+		}
+
+		if (Nl == std::string::npos) break;
+		Pos = Nl + 1;
+	}
+
+	return Cleaned;
+}
+
 static void
 updater_check_thread(GlobalState *AppState)
 {
@@ -399,15 +598,13 @@ updater_check_thread(GlobalState *AppState)
 	std::string Body;
 	bool Fetched =
 #ifdef _WIN32
-		updater_winhttp_get(UPDATER_API_LATEST_URL, nullptr, &Body, nullptr, nullptr, nullptr);
+		updater_winhttp_get(UPDATER_API_RELEASES_URL, nullptr, &Body, nullptr, nullptr, nullptr);
 #else
-		updater_fetch_string_linux(UPDATER_API_LATEST_URL, &Body);
+		updater_fetch_string_linux(UPDATER_API_RELEASES_URL, &Body);
 #endif
 
-	std::string TagName;
-	std::string HtmlUrl;
-	std::vector<UpdateAssetInfo> Assets;
-	if (!Fetched || !updater_parse_release_json(Body, &TagName, &HtmlUrl, &Assets))
+	std::vector<UpdateReleaseInfo> Releases;
+	if (!Fetched || !updater_parse_releases_json(Body, &Releases))
 	{
 		U->StagingCheckSucceeded = false;
 		U->CheckRunning.store(false);
@@ -420,23 +617,56 @@ updater_check_thread(GlobalState *AppState)
 	const char *PlatformTag = "-x86_64-linux-";
 #endif
 
-	std::vector<UpdateAssetInfo> Matching;
-	for (const UpdateAssetInfo &Asset : Assets)
+	const UpdateReleaseInfo *Latest = nullptr;
+	for (const UpdateReleaseInfo &Release : Releases)
 	{
-		if (Asset.Name.find(PlatformTag) == std::string::npos) continue;
-		Matching.push_back(Asset);
+		if (Release.IsDraft || Release.IsPrerelease) continue;
+		Latest = &Release;
+		break;
 	}
 
-	UpdaterVersion Latest = {};
+	std::vector<UpdateAssetInfo> Matching;
+	if (Latest)
+	{
+		for (const UpdateAssetInfo &Asset : Latest->Assets)
+		{
+			if (Asset.Name.find(PlatformTag) == std::string::npos) continue;
+			Matching.push_back(Asset);
+		}
+	}
+
+	UpdaterVersion LatestVersion = {};
 	UpdaterVersion Current = {};
-	bool HaveLatest = updater_parse_version(TagName, &Latest);
+	bool HaveLatest = Latest && updater_parse_version(Latest->TagName, &LatestVersion);
 	bool HaveCurrent = updater_parse_version(updater_current_version_base(), &Current);
 
-	U->StagingLatestVersion = TagName;
-	U->StagingReleaseUrl = HtmlUrl.empty() ? UPDATER_RELEASES_URL : HtmlUrl;
+	std::vector<UpdateChangelogEntry> Newer;
+	bool IsNewerAvailable = HaveLatest && HaveCurrent && updater_version_is_newer(LatestVersion, Current);
+	if (IsNewerAvailable)
+	{
+		for (const UpdateReleaseInfo &Release : Releases)
+		{
+			if (Release.IsDraft || Release.IsPrerelease) continue;
+
+			UpdaterVersion Version = {};
+			if (!updater_parse_version(Release.TagName, &Version)) continue;
+			if (!updater_version_is_newer(Version, Current)) break;
+
+			std::string Notes = updater_clean_release_notes(Release.Body);
+			if (Notes.empty()) continue;
+
+			UpdateChangelogEntry Entry;
+			Entry.Version = Release.TagName;
+			Entry.Notes = std::move(Notes);
+			Newer.push_back(std::move(Entry));
+		}
+	}
+
+	U->StagingLatestVersion = Latest ? Latest->TagName : "";
+	U->StagingReleaseUrl = (!Latest || Latest->HtmlUrl.empty()) ? UPDATER_RELEASES_URL : Latest->HtmlUrl;
 	U->StagingAssets = std::move(Matching);
-	U->StagingIsNewerAvailable =
-		HaveLatest && HaveCurrent && updater_version_is_newer(Latest, Current);
+	U->StagingNewerReleases = std::move(Newer);
+	U->StagingIsNewerAvailable = IsNewerAvailable;
 	U->StagingCheckSucceeded = true;
 
 	U->CheckRunning.store(false);
@@ -566,6 +796,7 @@ updater_publish_finished_check(GlobalState *AppState)
 		U->LatestVersion = std::move(U->StagingLatestVersion);
 		U->ReleaseUrl = std::move(U->StagingReleaseUrl);
 		U->Assets = std::move(U->StagingAssets);
+		U->NewerReleases = std::move(U->StagingNewerReleases);
 		U->IsNewerAvailable = U->StagingIsNewerAvailable;
 		U->CheckFailed.store(false);
 		U->CheckSucceeded.store(true);

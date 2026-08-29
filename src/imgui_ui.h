@@ -13,6 +13,7 @@
 #include "updater.h"
 
 #include <cstdio>
+#include <cstring>
 
 #define BUTTON_COLOR_GREEN   ImVec4(0.0f, 0.50f, 0.0f, 1.0f)
 #define BUTTON_COLOR_RED     ImVec4(0.75f, 0.07f, 0.13f, 1.0f)
@@ -334,6 +335,34 @@ render_update_modal(GlobalState *AppState)
 
 		ImGui::TextDisabled("%s", platform_is_installed_build() ?
 			"Installed (MSI) build detected" : "Portable build detected");
+
+		if (U->CheckSucceeded.load() && !U->CheckRunning.load() &&
+			U->IsNewerAvailable && !U->NewerReleases.empty())
+		{
+			ImGui::Separator();
+			ImGui::TextDisabled("Changelog");
+			ImGui::Spacing();
+
+			for (const UpdateChangelogEntry &Entry : U->NewerReleases)
+			{
+				ImGui::TextUnformatted(Entry.Version.c_str());
+
+				const char *LineStart = Entry.Notes.c_str();
+				for (;;)
+				{
+					const char *Nl = strchr(LineStart, '\n');
+					if (!Nl)
+					{
+						ImGui::TextWrapped("%s", LineStart);
+						break;
+					}
+					ImGui::TextWrapped("%.*s", (int)(Nl - LineStart), LineStart);
+					LineStart = Nl + 1;
+				}
+
+				ImGui::Spacing();
+			}
+		}
 
 		ImGui::EndPopup();
 	}
