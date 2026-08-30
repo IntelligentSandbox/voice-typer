@@ -1,9 +1,12 @@
+#define NOMINMAX
+
 #include "transcription_core.h"
 #include "whisper_wrapper.h"
 #include "stream_chunker.h"
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -36,6 +39,10 @@ struct BenchOptions
 	int IterationCount = 5;
 	int ThreadCount = 1;
 	std::string LogMode = "off";
+	std::string NoisePath;
+	bool HasNoise = false;
+	double SnrDb = 10.0;
+	bool HasSnr = false;
 };
 
 static FILE     *g_BenchLogFile  = nullptr;
@@ -99,7 +106,8 @@ print_usage(const char *ExeName)
 		<< " --audio <path> [--model <path>] [--expected-text <text>]"
 		<< " [--mode <record|streaming>] [--vad <on|off>] [--vad-model <path>]"
 		<< " [--device <cpu|gpu>] [--warmup <count>] [--iterations <count>]"
-		<< " [--threads <count>] [--log <off|file|verbose>]\n";
+		<< " [--threads <count>] [--log <off|file|verbose>]"
+		<< " [--noise <wav>] [--snr <db>]\n";
 }
 
 static bool
@@ -109,6 +117,16 @@ parse_int_arg(const char *Value, int MinValue, int *OutValue)
 	long Parsed = std::strtol(Value, &End, 10);
 	if (End == Value || *End != '\0' || Parsed < MinValue || Parsed > INT32_MAX) return false;
 	*OutValue = (int)Parsed;
+	return true;
+}
+
+static bool
+parse_double_arg(const char *Value, double *OutValue)
+{
+	char *End = nullptr;
+	double Parsed = std::strtod(Value, &End);
+	if (End == Value || *End != '\0') return false;
+	*OutValue = Parsed;
 	return true;
 }
 
@@ -149,6 +167,19 @@ parse_options(int ArgCount, char **Args, BenchOptions *Options)
 			if (!Value) return false;
 			Options->ExpectedText = Value;
 			Options->HasExpectedText = true;
+		}
+		else if (Arg == "--noise")
+		{
+			const char *Value = require_value("--noise");
+			if (!Value) return false;
+			Options->NoisePath = Value;
+			Options->HasNoise = true;
+		}
+		else if (Arg == "--snr")
+		{
+			const char *Value = require_value("--snr");
+			if (!Value || !parse_double_arg(Value, &Options->SnrDb)) return false;
+			Options->HasSnr = true;
 		}
 		else if (Arg == "--warmup")
 		{
@@ -235,6 +266,12 @@ parse_options(int ArgCount, char **Args, BenchOptions *Options)
 	if (Options->AudioPath.empty())
 	{
 		std::cerr << "--audio is required\n";
+		return false;
+	}
+
+	if (!Options->HasNoise && Options->HasSnr)
+	{
+		std::cerr << "--snr requires --noise\n";
 		return false;
 	}
 
@@ -398,6 +435,37 @@ load_wav_mono_16khz(const std::string &Path, std::vector<float> *OutSamples, std
 }
 
 static double
+compute_samples_rms(const std::vector<float> &Samples)
+{
+	if (Samples.empty()) return 0.0;
+
+	double Sum = 0.0;
+	for (float S : Samples)
+	{
+		Sum += (double)S * (double)S;
+	}
+
+	return std::sqrt(Sum / (double)Samples.size());
+}
+
+static void
+mix_noise_at_snr(std::vector<float> *Samples, const std::vector<float> &Noise, double SnrDb)
+{
+	double SignalRms = compute_samples_rms(*Samples);
+	double NoiseRms = compute_samples_rms(Noise);
+	if (SignalRms <= 0.0 || NoiseRms <= 0.0) return;
+
+	double NoiseGain = SignalRms / (NoiseRms * std::pow(10.0, SnrDb / 20.0));
+	for (size_t i = 0; i < Samples->size(); i++)
+	{
+		double Mixed = (double)(*Samples)[i] + (double)Noise[i % Noise.size()] * NoiseGain;
+		if (Mixed > 1.0) Mixed = 1.0;
+		else if (Mixed < -1.0) Mixed = -1.0;
+		(*Samples)[i] = (float)Mixed;
+	}
+}
+
+static double
 elapsed_ms(std::chrono::steady_clock::time_point Start, std::chrono::steady_clock::time_point End)
 {
 	return std::chrono::duration<double, std::milli>(End - Start).count();
@@ -459,6 +527,110 @@ normalize_expected_text(std::string Text)
 
 	size_t End = Normalized.find_last_not_of(" \t\n\r\f\v");
 	return Normalized.substr(Begin, End - Begin + 1);
+}
+
+static std::string
+wer_normalize(const std::string &Text)
+{
+	std::string Out;
+	Out.reserve(Text.size());
+	for (size_t i = 0; i < Text.size(); i++)
+	{
+		char C = Text[i];
+		if (C >= 'A' && C <= 'Z') C = (char)(C - 'A' + 'a');
+		bool Keep = (C >= 'a' && C <= 'z') || (C >= '0' && C <= '9') || C == '\'';
+		Out.push_back(Keep ? C : ' ');
+	}
+
+	return Out;
+}
+
+static std::vector<std::string>
+split_words(const std::string &Text)
+{
+	std::vector<std::string> Words;
+	std::string Current;
+	for (size_t i = 0; i < Text.size(); i++)
+	{
+		char C = Text[i];
+		if (C == ' ' || C == '\t' || C == '\n' || C == '\r')
+		{
+			if (!Current.empty())
+			{
+				Words.push_back(Current);
+				Current.clear();
+			}
+		}
+		else
+		{
+			Current.push_back(C);
+		}
+	}
+
+	if (!Current.empty()) Words.push_back(Current);
+
+	return Words;
+}
+
+struct WerCounts
+{
+	int Substitutions = 0;
+	int Deletions = 0;
+	int Insertions = 0;
+	int ReferenceWords = 0;
+};
+
+static WerCounts
+compute_wer(const std::vector<std::string> &Reference, const std::vector<std::string> &Hypothesis)
+{
+	size_t RefCount = Reference.size();
+	size_t HypCount = Hypothesis.size();
+	std::vector<std::vector<int>> Table(RefCount + 1, std::vector<int>(HypCount + 1, 0));
+	for (size_t i = 0; i <= RefCount; i++) Table[i][0] = (int)i;
+	for (size_t j = 0; j <= HypCount; j++) Table[0][j] = (int)j;
+
+	for (size_t i = 1; i <= RefCount; i++)
+	{
+		for (size_t j = 1; j <= HypCount; j++)
+		{
+			int SubCost = Table[i - 1][j - 1] + (Reference[i - 1] == Hypothesis[j - 1] ? 0 : 1);
+			int DelCost = Table[i - 1][j] + 1;
+			int InsCost = Table[i][j - 1] + 1;
+			Table[i][j] = std::min(SubCost, std::min(DelCost, InsCost));
+		}
+	}
+
+	WerCounts Counts;
+	Counts.ReferenceWords = (int)RefCount;
+
+	size_t i = RefCount;
+	size_t j = HypCount;
+	while (i > 0 || j > 0)
+	{
+		if (i > 0 && j > 0 && Reference[i - 1] == Hypothesis[j - 1])
+		{
+			i--;
+			j--;
+		}
+		else if (i > 0 && j > 0 && Table[i][j] == Table[i - 1][j - 1] + 1)
+		{
+			Counts.Substitutions++;
+			i--;
+			j--;
+		}
+		else if (i > 0 && Table[i][j] == Table[i - 1][j] + 1)
+		{
+			Counts.Deletions++;
+			i--;
+		}
+		else
+		{
+			Counts.Insertions++;
+			j--;
+		}
+	}
+
+	return Counts;
 }
 
 static std::string
@@ -562,6 +734,18 @@ main(int ArgCount, char **Args)
 	{
 		std::cerr << Error << "\n";
 		return 1;
+	}
+
+	if (Options.HasNoise)
+	{
+		std::vector<float> Noise;
+		if (!load_wav_mono_16khz(Options.NoisePath, &Noise, &Error))
+		{
+			std::cerr << Error << "\n";
+			return 1;
+		}
+
+		mix_noise_at_snr(&Samples, Noise, Options.SnrDb);
 	}
 
 	WhisperModelState ModelState = {};
@@ -693,8 +877,13 @@ main(int ArgCount, char **Args)
 	std::cout << "{\"mode\":\"" << Options.Mode
 		<< "\",\"vad\":" << (Options.EnableVad ? "true" : "false")
 		<< ",\"device\":\"" << Options.Device << "\""
-		<< ",\"log\":\"" << Options.LogMode << "\""
-		<< ",\"model_load_ms\":" << format_ms(elapsed_ms(LoadStart, LoadEnd))
+		<< ",\"log\":\"" << Options.LogMode << "\"";
+	if (Options.HasNoise)
+	{
+		std::cout << ",\"noise\":\"" << json_escape(Options.NoisePath) << "\""
+			<< ",\"snr_db\":" << std::fixed << std::setprecision(1) << Options.SnrDb;
+	}
+	std::cout << ",\"model_load_ms\":" << format_ms(elapsed_ms(LoadStart, LoadEnd))
 		<< ",\"unit_count\":" << Units.size()
 		<< ",\"unit_durations_ms\":[";
 	for (size_t i = 0; i < UnitDurationsMs.size(); i++)
@@ -726,8 +915,21 @@ main(int ArgCount, char **Args)
 	std::cout << "],\"text\":\"" << json_escape(Text) << "\"";
 	if (Options.HasExpectedText)
 	{
+		std::vector<std::string> RefWords = split_words(wer_normalize(NormalizedExpected));
+		std::vector<std::string> HypWords = split_words(wer_normalize(NormalizedText));
+		WerCounts Counts = compute_wer(RefWords, HypWords);
+		int ErrorWords = Counts.Substitutions + Counts.Deletions + Counts.Insertions;
+		double Wer = 0.0;
+		if (Counts.ReferenceWords > 0) Wer = (double)ErrorWords / (double)Counts.ReferenceWords;
+		else if (ErrorWords > 0) Wer = 1.0;
+
 		std::cout << ",\"expected_text\":\"" << json_escape(Options.ExpectedText) << "\""
-			<< ",\"expected_text_match\":" << (NormalizedText == NormalizedExpected ? "true" : "false");
+			<< ",\"expected_text_match\":" << (NormalizedText == NormalizedExpected ? "true" : "false")
+			<< ",\"wer\":" << std::fixed << std::setprecision(6) << Wer
+			<< ",\"wer_ref_words\":" << Counts.ReferenceWords
+			<< ",\"wer_substitutions\":" << Counts.Substitutions
+			<< ",\"wer_deletions\":" << Counts.Deletions
+			<< ",\"wer_insertions\":" << Counts.Insertions;
 	}
 
 	std::cout << "}\n";
