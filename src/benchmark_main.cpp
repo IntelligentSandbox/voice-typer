@@ -38,6 +38,7 @@ struct BenchOptions
 	int WarmupCount = 1;
 	int IterationCount = 5;
 	int ThreadCount = 1;
+	int BeamSize = 1;
 	std::string LogMode = "off";
 	std::string NoisePath;
 	bool HasNoise = false;
@@ -107,7 +108,7 @@ print_usage(const char *ExeName)
 		<< " [--mode <record|streaming>] [--vad <on|off>] [--vad-model <path>]"
 		<< " [--device <cpu|gpu>] [--warmup <count>] [--iterations <count>]"
 		<< " [--threads <count>] [--log <off|file|verbose>]"
-		<< " [--noise <wav>] [--snr <db>]\n";
+		<< " [--beam <1-16>] [--noise <wav>] [--snr <db>]\n";
 }
 
 static bool
@@ -195,6 +196,11 @@ parse_options(int ArgCount, char **Args, BenchOptions *Options)
 		{
 			const char *Value = require_value("--threads");
 			if (!Value || !parse_int_arg(Value, 1, &Options->ThreadCount)) return false;
+		}
+		else if (Arg == "--beam")
+		{
+			const char *Value = require_value("--beam");
+			if (!Value || !parse_int_arg(Value, 1, &Options->BeamSize)) return false;
 		}
 		else if (Arg == "--mode")
 		{
@@ -812,9 +818,14 @@ main(int ArgCount, char **Args)
 	const char *VadModelArg = Options.EnableVad ? Options.VadModelPath.c_str() : nullptr;
 
 	auto run_one_pass = [&](std::string *OutText, std::vector<double> *UnitTimes) -> int {
-		whisper_full_params Params = make_transcription_whisper_params(
-			Options.ThreadCount, Options.EnableVad, VadModelArg);
-		Params.single_segment = SingleSegment;
+	whisper_full_params Params = make_transcription_whisper_params(
+		Options.ThreadCount, Options.EnableVad, VadModelArg);
+	Params.single_segment = SingleSegment;
+	if (Options.BeamSize > 1)
+	{
+		Params.strategy             = WHISPER_SAMPLING_BEAM_SEARCH;
+		Params.beam_search.beam_size = Options.BeamSize;
+	}
 		OutText->clear();
 		for (size_t u = 0; u < Units.size(); u++)
 		{
@@ -877,6 +888,8 @@ main(int ArgCount, char **Args)
 	std::cout << "{\"mode\":\"" << Options.Mode
 		<< "\",\"vad\":" << (Options.EnableVad ? "true" : "false")
 		<< ",\"device\":\"" << Options.Device << "\""
+		<< ",\"threads\":" << Options.ThreadCount
+		<< ",\"beam\":" << Options.BeamSize
 		<< ",\"log\":\"" << Options.LogMode << "\"";
 	if (Options.HasNoise)
 	{

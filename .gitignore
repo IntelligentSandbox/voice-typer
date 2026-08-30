@@ -5,6 +5,7 @@ vad_models/
 dist/
 docs/
 .dev/
+.bench_data/
 
 compile_commands.json
 result*
