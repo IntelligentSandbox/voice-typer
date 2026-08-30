@@ -6,22 +6,10 @@ As a standalone program, it can be used to input text directly from your voice i
 desktop applications such as your web browser, note taking app, or even messaging
 app that doesn't have a voice input feature. 
 
-## LLM Usage Disclaimer:
-LLMs are used to write code in this project with human review done at our discretion.
+![](media/VoiceTyperDemo.gif)
 
-LLM Coding Agent Harnesses Used:
-[OpenCode](https://github.com/anomalyco/opencode),
-[Codex](https://github.com/openai/codex),
-[Claude Code](https://code.claude.com/docs/en/overview)
-
-LLMs Used:
-[GLM 5.3](https://z.ai/blog/glm-5.3),
-[GLM 5.2](https://z.ai/blog/glm-5.2),
-[Kimi K3](https://www.kimi.com/ai-models/kimi-k3),
-[OpenCode Zen Big Pickle](https://grokipedia.com/page/Big_Pickle_model),
-[Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6),
-[Claude Sonnet 4.6](https://www.anthropic.com/news/claude-sonnet-4-6),
-[OpenAI GPT-5.5](https://platform.openai.com/docs/models/gpt-5.5)
+> [!NOTE]
+> LLMs are used to generate code for this project, more info at bottom of README.
 
 ## Dependencies
 Sources copied directly into the repo:
@@ -65,3 +53,20 @@ Turing and Ampere are built as PTX (JIT-compiled on first run on any newer GPU),
 **Older GPUs not supported**: Maxwell (GTX 900-series), Pascal (GTX 1000-series), and Volta (V100) are not compatible with the CUDA 13.x toolkit and are not included in the build. Users with these GPUs should use the CPU build instead.
 
 To customize the architecture list at build time, pass `-DCMAKE_CUDA_ARCHITECTURES=<list>` to cmake. See the [CMake CUDA_ARCHITECTURES documentation](https://cmake.org/cmake/help/latest/prop_tgt/CUDA_ARCHITECTURES.html) for the format.
+
+## LLM Usage Disclaimer:
+LLMs are used to write code in this project with human review done at our discretion.
+
+LLM Coding Agent Harnesses Used:
+[OpenCode](https://github.com/anomalyco/opencode),
+[Codex](https://github.com/openai/codex),
+[Claude Code](https://code.claude.com/docs/en/overview)
+
+LLMs Used:
+[GLM 5.3](https://z.ai/blog/glm-5.3),
+[GLM 5.2](https://z.ai/blog/glm-5.2),
+[Kimi K3](https://www.kimi.com/ai-models/kimi-k3),
+[OpenCode Zen Big Pickle](https://grokipedia.com/page/Big_Pickle_model),
+[Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6),
+[Claude Sonnet 4.6](https://www.anthropic.com/news/claude-sonnet-4-6),
+[OpenAI GPT-5.5](https://platform.openai.com/docs/models/gpt-5.5)
