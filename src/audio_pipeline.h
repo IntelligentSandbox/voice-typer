@@ -176,8 +176,7 @@ stream_finish_buffer_on_stop(GlobalState *AppState, StreamingChunkQueue *Queue, 
 static void
 stream_segment_thread(GlobalState *AppState, StreamingChunkQueue *Queue)
 {
-	int SilenceMs = 0;
-	bool HasSpeech = false;
+	StreamSpeechDetector Detector;
 
 	while (AppState->CaptureRunning.load())
 	{
@@ -195,43 +194,30 @@ stream_segment_thread(GlobalState *AppState, StreamingChunkQueue *Queue)
 			float CurrentRms = compute_rms(
 				AppState->AudioAccumBuffer.data() + BufferSize - RecentCount, RecentCount);
 
-			if (CurrentRms >= STREAM_SPEECH_RMS_THRESHOLD)
-			{
-				HasSpeech = true;
-				SilenceMs = 0;
-			}
-			else if (HasSpeech)
-			{
-				SilenceMs += STREAM_POLL_INTERVAL_MS;
-			}
-			else
+			bool IsSpeech = stream_speech_detector_poll(&Detector, CurrentRms, STREAM_POLL_INTERVAL_MS);
+			if (!IsSpeech && !Detector.HasSpeech)
 			{
 				AppState->AudioAccumBuffer.clear();
 				continue;
 			}
 
 			int BufferDurationMs = BufferSize * 1000 / AUDIO_CAPTURE_SAMPLE_RATE;
-			bool ShouldCut = false;
-
-			if (HasSpeech &&
-				SilenceMs >= STREAM_SILENCE_DURATION_MS &&
-				BufferDurationMs >= STREAM_MIN_CHUNK_DURATION_MS)
-			{
-				ShouldCut = true;
-			}
+			bool ShouldCut = Detector.HasSpeech &&
+				Detector.SilenceMs >= STREAM_SILENCE_DURATION_MS &&
+				BufferDurationMs >= STREAM_MIN_CHUNK_DURATION_MS;
 
 			if (!ShouldCut) continue;
 
 			Chunk = std::move(AppState->AudioAccumBuffer);
 			AppState->AudioAccumBuffer.clear();
-			SilenceMs = 0;
-			HasSpeech = false;
+			Detector.SilenceMs = 0;
+			Detector.HasSpeech = false;
 		}
 
 		stream_push_completed_chunk(Queue, Chunk);
 	}
 
-	stream_finish_buffer_on_stop(AppState, Queue, HasSpeech);
+	stream_finish_buffer_on_stop(AppState, Queue, Detector.HasSpeech);
 }
 
 static void
