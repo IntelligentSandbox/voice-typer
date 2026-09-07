@@ -56,6 +56,7 @@ app_initialize_runtime(GlobalState *AppState, PlatformWindowHandle OwnWindow)
 	AppState->Ui.SettingsState.PasteOverrideCapture.PeakVirtualKey = 0;
 	AppState->Ui.SettingsState.PasteOverrideCapture.ReleaseFrames = 0;
 	AppState->Ui.SettingsState.PasteOverrideCaptureProcess.clear();
+	AppState->Ui.SettingsState.PasteOverrideModalOpen = false;
 	AppState->Ui.IsCrashDialogOpen = false;
 	AppState->Ui.CrashDialogOpened = false;
 	AppState->Ui.PendingCrashDumps.clear();

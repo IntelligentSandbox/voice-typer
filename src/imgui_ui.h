@@ -911,80 +911,9 @@ render_settings_panel(GlobalState *AppState)
 
 	ImGui::Separator();
 
-	ImGui::SetWindowFontScale(1.3f);
-	ImGui::Text("Per-Program Paste Hotkeys");
-	ImGui::SetWindowFontScale(1.0f);
-
-	ImGui::TextWrapped(
-		"Override the Paste Text hotkey for individual programs, matched by executable name "
-		"(e.g. Code.exe, WindowsTerminal.exe). Handy when one app needs a different paste shortcut.");
-
-	std::vector<PasteHotkeyOverride> Overrides;
+	if (colored_button("Configure Per Program Paste", ImVec2(-1.0f, 30.0f), BUTTON_COLOR_GREY))
 	{
-		std::lock_guard<std::mutex> Lock(AppState->PasteHotkeyOverridesMutex);
-		Overrides = AppState->PasteHotkeyOverrides;
-	}
-
-	std::string ForgetOverrideName;
-	for (const PasteHotkeyOverride &Override : Overrides)
-	{
-		ImGui::PushID(Override.ProcessName.c_str());
-		ImGui::Text("%s: %s", Override.ProcessName.c_str(), hotkey_to_label(Override.Hotkey).c_str());
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Forget")) ForgetOverrideName = Override.ProcessName;
-		ImGui::PopID();
-	}
-	if (!ForgetOverrideName.empty()) remove_paste_hotkey_override(AppState, ForgetOverrideName);
-
-	if (S->PasteOverrideCapture.IsCapturing)
-	{
-		HotkeyConfig Captured = {};
-		HotkeyCaptureResult CaptureResult = poll_hotkey_capture(&S->PasteOverrideCapture, &Captured);
-		if (CaptureResult == HOTKEY_CAPTURE_CLEARED)
-		{
-			S->PasteOverrideCaptureProcess.clear();
-		}
-		else if (CaptureResult == HOTKEY_CAPTURE_COMMITTED)
-		{
-			upsert_paste_hotkey_override(AppState, S->PasteOverrideCaptureProcess, Captured);
-			S->NewPasteOverrideProcess[0] = '\0';
-			S->PasteOverrideCaptureProcess.clear();
-		}
-	}
-
-	if (S->PasteOverrideCapture.IsCapturing)
-	{
-		std::string CaptureText;
-		if (S->PasteOverrideCapture.HasCapture)
-			CaptureText = hotkey_to_label(S->PasteOverrideCapture.Captured) + " for " +
-				S->PasteOverrideCaptureProcess + "...";
-		else
-			CaptureText = "Press a key combination for " + S->PasteOverrideCaptureProcess + "...";
-
-		if (colored_button(CaptureText.c_str(), ImVec2(-1.0f, 30.0f), ImVec4(0.08f, 0.40f, 0.75f, 1.0f)))
-		{
-			S->PasteOverrideCapture.IsCapturing = false;
-			S->PasteOverrideCaptureProcess.clear();
-		}
-		ImGui::TextWrapped("Escape cancels.");
-	}
-	else
-	{
-		ImGui::SetNextItemWidth(-1.0f);
-		ImGui::InputTextWithHint("##NewPasteOverrideProcess", "Program executable name, e.g. Code.exe",
-			S->NewPasteOverrideProcess, sizeof(S->NewPasteOverrideProcess));
-		std::string NewName = paste_override_process_name_from_input(S->NewPasteOverrideProcess);
-		if (colored_button("Set Paste Hotkey for Program...", ImVec2(-1.0f, 30.0f), BUTTON_COLOR_GREY,
-			!NewName.empty()))
-		{
-			S->PasteOverrideCaptureProcess = NewName;
-			S->PasteOverrideCapture.Captured = {};
-			S->PasteOverrideCapture.HasCapture = false;
-			S->PasteOverrideCapture.IsCapturing = true;
-			S->PasteOverrideCapture.PeakModifiers = 0;
-			S->PasteOverrideCapture.PeakVirtualKey = 0;
-			S->PasteOverrideCapture.ReleaseFrames = 0;
-		}
+		S->PasteOverrideModalOpen = true;
 	}
 
 	ImGui::Separator();
@@ -1110,6 +1039,131 @@ render_crash_dialog_ui(GlobalState *AppState)
 	}
 
 	ImGui::EndPopup();
+}
+
+// ---------------------------------------------------------------------------
+// Per-Program Paste Hotkeys modal - opened from the settings panel
+// ---------------------------------------------------------------------------
+static void
+render_paste_override_modal(GlobalState *AppState)
+{
+	SettingsWindowState *S = &AppState->Ui.SettingsState;
+
+	if (!S->PasteOverrideModalOpen)
+	{
+		if (S->PasteOverrideCapture.IsCapturing)
+		{
+			S->PasteOverrideCapture.IsCapturing = false;
+			S->PasteOverrideCaptureProcess.clear();
+		}
+		return;
+	}
+
+	if (!ImGui::IsPopupOpen("Per-Program Paste Hotkeys"))
+	{
+		ImGui::OpenPopup("Per-Program Paste Hotkeys");
+	}
+
+	ImVec2 Display = ImGui::GetIO().DisplaySize;
+	ImGui::SetNextWindowSizeConstraints(ImVec2(Display.x * 0.4f, 0.0f), ImVec2(Display.x * 0.95f, Display.y * 0.95f));
+	ImGui::SetNextWindowPos(ImVec2(Display.x * 0.5f, Display.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowBgAlpha(1.0f);
+
+	bool Open = true;
+	if (ImGui::BeginPopupModal("Per-Program Paste Hotkeys", &Open,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+	{
+		modal_close_on_click_outside(&S->PasteOverrideModalOpen);
+
+		float WrapW = ImGui::GetFontSize() * 34.0f;
+		ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + WrapW);
+		ImGui::TextUnformatted(
+			"Override the Paste Text hotkey for individual programs, matched by executable name "
+			"(e.g. Code.exe, WindowsTerminal.exe). Handy when one app needs a different paste shortcut.");
+
+		ImGui::Spacing();
+		ImGui::TextUnformatted("Configured overrides:");
+		ImGui::PopTextWrapPos();
+
+		std::vector<PasteHotkeyOverride> Overrides;
+		{
+			std::lock_guard<std::mutex> Lock(AppState->PasteHotkeyOverridesMutex);
+			Overrides = AppState->PasteHotkeyOverrides;
+		}
+
+		if (Overrides.empty())
+		{
+			ImGui::TextDisabled("(none yet)");
+		}
+
+		std::string ForgetOverrideName;
+		for (const PasteHotkeyOverride &Override : Overrides)
+		{
+			ImGui::PushID(Override.ProcessName.c_str());
+			ImGui::Text("%s: %s", Override.ProcessName.c_str(), hotkey_to_label(Override.Hotkey).c_str());
+			ImGui::SameLine();
+			if (ImGui::SmallButton("Forget")) ForgetOverrideName = Override.ProcessName;
+			ImGui::PopID();
+		}
+		if (!ForgetOverrideName.empty()) remove_paste_hotkey_override(AppState, ForgetOverrideName);
+
+		ImGui::Separator();
+
+		if (S->PasteOverrideCapture.IsCapturing)
+		{
+			HotkeyConfig Captured = {};
+			HotkeyCaptureResult CaptureResult = poll_hotkey_capture(&S->PasteOverrideCapture, &Captured);
+			if (CaptureResult == HOTKEY_CAPTURE_CLEARED)
+			{
+				S->PasteOverrideCaptureProcess.clear();
+			}
+			else if (CaptureResult == HOTKEY_CAPTURE_COMMITTED)
+			{
+				upsert_paste_hotkey_override(AppState, S->PasteOverrideCaptureProcess, Captured);
+				S->NewPasteOverrideProcess[0] = '\0';
+				S->PasteOverrideCaptureProcess.clear();
+			}
+		}
+
+		if (S->PasteOverrideCapture.IsCapturing)
+		{
+			std::string CaptureText;
+			if (S->PasteOverrideCapture.HasCapture)
+				CaptureText = hotkey_to_label(S->PasteOverrideCapture.Captured) + " for " +
+					S->PasteOverrideCaptureProcess + "...";
+			else
+				CaptureText = "Press a key combination for " + S->PasteOverrideCaptureProcess + "...";
+
+			if (colored_button(CaptureText.c_str(), ImVec2(-1.0f, 30.0f), ImVec4(0.08f, 0.40f, 0.75f, 1.0f)))
+			{
+				S->PasteOverrideCapture.IsCapturing = false;
+				S->PasteOverrideCaptureProcess.clear();
+			}
+			ImGui::TextDisabled("Escape cancels.");
+		}
+		else
+		{
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::InputTextWithHint("##NewPasteOverrideProcess", "Program executable name, e.g. Code.exe",
+				S->NewPasteOverrideProcess, sizeof(S->NewPasteOverrideProcess));
+			std::string NewName = paste_override_process_name_from_input(S->NewPasteOverrideProcess);
+			if (colored_button("Set Paste Hotkey for Program...", ImVec2(-1.0f, 30.0f), BUTTON_COLOR_GREY,
+				!NewName.empty()))
+			{
+				S->PasteOverrideCaptureProcess = NewName;
+				S->PasteOverrideCapture.Captured = {};
+				S->PasteOverrideCapture.HasCapture = false;
+				S->PasteOverrideCapture.IsCapturing = true;
+				S->PasteOverrideCapture.PeakModifiers = 0;
+				S->PasteOverrideCapture.PeakVirtualKey = 0;
+				S->PasteOverrideCapture.ReleaseFrames = 0;
+			}
+		}
+
+		ImGui::EndPopup();
+	}
+
+	if (!Open) S->PasteOverrideModalOpen = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -1787,6 +1841,7 @@ render_main_ui(GlobalState *AppState, ImGuiIO &Io)
 	render_download_modal(AppState);
 	render_update_modal(AppState);
 	render_crash_dialog_ui(AppState);
+	render_paste_override_modal(AppState);
 
 	ImGui::End();
 
