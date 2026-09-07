@@ -229,8 +229,8 @@ theme_toggle_button(GlobalState *AppState)
 	else
 	{
 		// Sun: filled disc with eight rays.
-		ImVec4 Color = Hovered ? ImVec4(1.0f, 0.85f, 0.35f, 1.0f)
-			: ImVec4(0.95f, 0.75f, 0.2f, 1.0f);
+		ImVec4 Color = Hovered ? ImVec4(0.95f, 0.95f, 0.95f, 1.0f)
+			: ImVec4(0.70f, 0.70f, 0.70f, 1.0f);
 		ImU32 Color32 = ImGui::ColorConvertFloat4ToU32(Color);
 
 		float R = Diameter * 0.42f;
