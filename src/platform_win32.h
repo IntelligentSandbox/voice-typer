@@ -22,6 +22,7 @@
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "uiautomationcore.lib")
+#pragma comment(lib, "oleaut32.lib")
 
 // ---------------------------------------------------------------------------
 // Platform interface implementations (declared in platform.h)
@@ -322,6 +323,18 @@ platform_window_has_focused_text_input(PlatformRuntimeState *Platform, void *Win
 			if (Element->get_CurrentControlType(&ControlType) == S_OK)
 			{
 				Result = (ControlType == UIA_EditControlTypeId || ControlType == UIA_DocumentControlTypeId);
+			}
+
+			if (!Result)
+			{
+				VARIANT TextPatternAvailable;
+				if (Element->GetCurrentPropertyValue(UIA_IsTextPatternAvailablePropertyId,
+					&TextPatternAvailable) == S_OK)
+				{
+					Result = (TextPatternAvailable.vt == VT_BOOL &&
+						TextPatternAvailable.boolVal == VARIANT_TRUE);
+					VariantClear(&TextPatternAvailable);
+				}
 			}
 			Element->Release();
 		}
