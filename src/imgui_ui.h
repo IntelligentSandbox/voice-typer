@@ -878,6 +878,10 @@ render_settings_panel(GlobalState *AppState)
 
 	ImGui::SetWindowFontScale(1.3f);
 	ImGui::Text("Keyboard Shortcuts");
+	ImGui::SameLine();
+	hover_help_mark(
+		"Select an action above, then click the box and press your desired combination. "
+		"Modifier-only combos (e.g. Ctrl+Alt) are supported. Escape clears the selected shortcut.");
 	ImGui::SetWindowFontScale(1.0f);
 
 	float AvailWidth = ImGui::GetContentRegionAvail().x;
@@ -957,10 +961,6 @@ render_settings_panel(GlobalState *AppState)
 
 		ImGui::PopStyleColor(4);
 	}
-
-	ImGui::TextWrapped(
-		"Select an action above, then click the box and press your desired combination. "
-		"Modifier-only combos (e.g. Ctrl+Alt) are supported. Escape clears the selected shortcut.");
 
 	ImGui::Separator();
 
