@@ -10,7 +10,10 @@
 inline void
 runtime_update_audio_input_selection(GlobalState *AppState, int Index)
 {
+	if (Index < 0 || Index >= (int)AppState->AudioInputDevices.size()) return;
+
 	AppState->CurrentAudioDeviceIndex = Index;
+	save_string_setting("audio_input_device", AppState->AudioInputDevices[Index].Name.c_str());
 }
 
 static void
@@ -132,7 +135,14 @@ runtime_update_whisper_thread_count(GlobalState *AppState, int Count)
 inline ModelTransitionFailure
 runtime_update_stt_model_selection(GlobalState *AppState, int Index)
 {
+	if (Index < 0 || Index >= (int)AppState->STTModelPaths.size()) return MODEL_TRANSITION_FAILURE_NONE;
+
 	AppState->CurrentSTTModelIndex = Index;
+
+	const std::string &ModelPath = AppState->STTModelPaths[Index];
+	size_t Slash = ModelPath.find_last_of("\\/");
+	std::string FileName = (Slash == std::string::npos) ? ModelPath : ModelPath.substr(Slash + 1);
+	save_string_setting("stt_model", FileName.c_str());
 
 	if (!is_whisper_model_loaded(&AppState->WhisperState)) return MODEL_TRANSITION_FAILURE_NONE;
 	if (AppState->WhisperState.LoadedModelIndex == Index) return MODEL_TRANSITION_FAILURE_NONE;

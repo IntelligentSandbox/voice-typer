@@ -109,6 +109,19 @@ query_audio_input_devices(GlobalState *AppState)
 				break;
 			}
 		}
+
+		std::string SavedDevice;
+		if (load_string_setting("audio_input_device", &SavedDevice) && !SavedDevice.empty())
+		{
+			for (int i = 0; i < (int)AppState->AudioInputDevices.size(); i++)
+			{
+				if (AppState->AudioInputDevices[i].Name == SavedDevice)
+				{
+					AppState->CurrentAudioDeviceIndex = i;
+					break;
+				}
+			}
+		}
 	}
 }
 

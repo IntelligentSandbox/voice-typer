@@ -906,7 +906,7 @@ render_settings_panel(GlobalState *AppState)
 	HelpMarkStyle ShortcutsMarkStyle = help_mark_default_style();
 	ShortcutsMarkStyle.DiameterScale = 0.75f;
 	hover_help_mark(
-		"Select an action above, then click the box and press your desired combination. "
+		"Select an action below, then click the box and press your desired combination. "
 		"Modifier-only combos (e.g. Ctrl+Alt) are supported. Escape clears the selected shortcut.",
 		ShortcutsMarkStyle);
 	ImGui::SetWindowFontScale(1.0f);

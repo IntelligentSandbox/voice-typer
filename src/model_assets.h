@@ -2,6 +2,7 @@
 
 #include "host_services.h"
 #include "model_catalog.h"
+#include "settings.h"
 #include "state.h"
 
 #include <cstdio>
@@ -73,4 +74,20 @@ query_available_stt_models(GlobalState *AppState)
 	}
 
 	AppState->CurrentSTTModelIndex = 0;
+
+	std::string SavedModel;
+	if (load_string_setting("stt_model", &SavedModel) && !SavedModel.empty())
+	{
+		for (int i = 0; i < (int)AppState->STTModelPaths.size(); i++)
+		{
+			const std::string &Path = AppState->STTModelPaths[i];
+			size_t Slash = Path.find_last_of("\\/");
+			std::string FileName = (Slash == std::string::npos) ? Path : Path.substr(Slash + 1);
+			if (FileName == SavedModel)
+			{
+				AppState->CurrentSTTModelIndex = i;
+				break;
+			}
+		}
+	}
 }
