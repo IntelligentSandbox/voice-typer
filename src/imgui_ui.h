@@ -77,6 +77,59 @@ modal_close_on_click_outside(bool *IsOpenFlag)
 }
 
 // ---------------------------------------------------------------------------
+// Reusable help mark: small circled '?' that shows a tooltip when hovered.
+// Laid out inline like any other item (call ImGui::SameLine() before it).
+// ---------------------------------------------------------------------------
+struct HelpMarkStyle
+{
+	float DiameterScale;  // circle diameter as a multiple of the current font size
+	float OutlineThickness;
+	float TooltipWrapEm;  // tooltip wrap width as a multiple of the current font size
+	ImVec4 MarkColor;     // circle outline and '?' glyph
+	ImVec4 HoverColor;    // circle outline and '?' glyph while hovered
+};
+
+static HelpMarkStyle
+help_mark_default_style()
+{
+	HelpMarkStyle Style = {};
+	Style.DiameterScale = 1.3f;
+	Style.OutlineThickness = 1.5f;
+	Style.TooltipWrapEm = 35.0f;
+	Style.MarkColor = ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
+	Style.HoverColor = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);
+	return Style;
+}
+
+static void
+hover_help_mark(const char *HelpText, const HelpMarkStyle &Style = help_mark_default_style())
+{
+	float FontSize = ImGui::GetFontSize();
+	float Diameter = FontSize * Style.DiameterScale;
+
+	ImVec2 Pos = ImGui::GetCursorScreenPos();
+	ImGui::Dummy(ImVec2(Diameter, Diameter));
+	bool Hovered = ImGui::IsItemHovered();
+
+	ImU32 Color32 = ImGui::ColorConvertFloat4ToU32(Hovered ? Style.HoverColor : Style.MarkColor);
+	ImVec2 Center = ImVec2(Pos.x + Diameter * 0.5f, Pos.y + FontSize * 0.5f);
+	ImGui::GetWindowDrawList()->AddCircle(Center, Diameter * 0.5f, Color32, 16, Style.OutlineThickness);
+
+	ImVec2 GlyphSize = ImGui::CalcTextSize("?");
+	ImGui::GetWindowDrawList()->AddText(
+		ImVec2(Center.x - GlyphSize.x * 0.5f, Center.y - GlyphSize.y * 0.5f), Color32, "?");
+
+	if (Hovered)
+	{
+		ImGui::BeginTooltip();
+		ImGui::PushTextWrapPos(ImGui::GetFontSize() * Style.TooltipWrapEm);
+		ImGui::TextUnformatted(HelpText);
+		ImGui::PopTextWrapPos();
+		ImGui::EndTooltip();
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Combo helper for std::vector<std::string>
 // ---------------------------------------------------------------------------
 static bool
@@ -1075,16 +1128,13 @@ render_paste_override_modal(GlobalState *AppState)
 	{
 		modal_close_on_click_outside(&S->PasteOverrideModalOpen);
 
-		float WrapW = ImGui::GetFontSize() * 34.0f;
-		ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + WrapW);
-		ImGui::TextUnformatted(
+		ImGui::TextUnformatted("Configured Hotkeys");
+		ImGui::SameLine();
+		hover_help_mark(
 			"Override the Paste Text hotkey for individual programs, matched by executable name "
-			"(e.g. Code.exe, WindowsTerminal.exe). Handy when one app needs a different paste shortcut.");
-
+			"(e.g. Code.exe, WindowsTerminal.exe). Handy when one app needs a different paste shortcut. "
+			"Click a shortcut to change it, X to remove it.");
 		ImGui::Spacing();
-		ImGui::TextUnformatted("Configured overrides:");
-		ImGui::TextDisabled("Click a shortcut to change it, X to remove it.");
-		ImGui::PopTextWrapPos();
 
 		std::vector<PasteHotkeyOverride> Overrides;
 		{
