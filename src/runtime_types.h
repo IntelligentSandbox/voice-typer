@@ -133,6 +133,12 @@ default_paste_hotkey()
 	return H;
 }
 
+struct PasteHotkeyOverride
+{
+	std::string ProcessName;
+	HotkeyConfig Hotkey;
+};
+
 enum RecordingHotkeyMode
 {
 	RECORDING_HOTKEY_HOLD = 0,

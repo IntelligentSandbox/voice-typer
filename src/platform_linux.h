@@ -669,6 +669,79 @@ platform_window_has_focused_text_input(PlatformRuntimeState *Platform, void *Win
 #endif
 }
 
+inline std::string
+platform_get_window_process_name(void *Window)
+{
+#ifdef VOICETYPER_HAVE_X11
+	if (!Window)
+	{
+		return "";
+	}
+
+	std::unique_lock<std::mutex> X11Lock;
+	LinuxX11ApiType *Api = linux_x11_acquire(X11Lock);
+	if (!Api)
+	{
+		return "";
+	}
+
+	Display *Dpy = Api->Dpy;
+	::Window XID = (::Window)(uintptr_t)Window;
+
+	long Pid = 0;
+	LinuxX11ErrorHandlerFn Prev = Api->XSetErrorHandler(&linux_x11_ignore_error);
+
+	Atom NetWmPid = Api->XInternAtom(Dpy, "_NET_WM_PID", True);
+	if (NetWmPid != None)
+	{
+		Atom PropType = None;
+		int PropFormat = 0;
+		unsigned long NumItems = 0;
+		unsigned long BytesAfter = 0;
+		unsigned char *Data = nullptr;
+		int Ret = Api->XGetWindowProperty(Dpy, XID, NetWmPid, 0, 1, False, XA_CARDINAL, &PropType, &PropFormat,
+			&NumItems, &BytesAfter, &Data);
+		if (Ret == Success && PropType == XA_CARDINAL && PropFormat == 32 && NumItems >= 1 && Data)
+		{
+			Pid = (long)((unsigned long *)Data)[0];
+		}
+		if (Data)
+		{
+			Api->XFree(Data);
+		}
+	}
+
+	Api->XSync(Dpy, False);
+	Api->XSetErrorHandler(Prev);
+
+	if (Pid <= 0)
+	{
+		return "";
+	}
+
+	char Comm[256] = {};
+	std::string ProcPath = "/proc/" + std::to_string(Pid) + "/comm";
+	FILE *F = fopen(ProcPath.c_str(), "r");
+	if (!F)
+	{
+		return "";
+	}
+	if (fgets(Comm, sizeof(Comm), F))
+	{
+		size_t Len = strlen(Comm);
+		while (Len > 0 && (Comm[Len - 1] == '\n' || Comm[Len - 1] == '\r'))
+		{
+			Comm[--Len] = '\0';
+		}
+	}
+	fclose(F);
+	return std::string(Comm);
+#else
+	(void)Window;
+	return "";
+#endif
+}
+
 inline void
 platform_set_taskbar_icon(void *Window, const char *PngPath)
 {

@@ -721,6 +721,32 @@ win32_wide_to_utf8(const std::wstring &Wide)
 	return Result;
 }
 
+inline std::string
+platform_get_window_process_name(void *Window)
+{
+	HWND HWnd = (HWND)Window;
+	if (!HWnd) return "";
+
+	DWORD Pid = 0;
+	if (GetWindowThreadProcessId(HWnd, &Pid) == 0 || Pid == 0) return "";
+
+	HANDLE Process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, Pid);
+	if (!Process) return "";
+
+	std::string Name;
+	WCHAR PathW[MAX_PATH] = {};
+	DWORD PathLen = MAX_PATH;
+	if (QueryFullProcessImageNameW(Process, 0, PathW, &PathLen) && PathLen > 0)
+	{
+		std::string Path = win32_wide_to_utf8(std::wstring(PathW, PathLen));
+		size_t Slash = Path.find_last_of("\\/");
+		Name = (Slash == std::string::npos) ? Path : Path.substr(Slash + 1);
+	}
+
+	CloseHandle(Process);
+	return Name;
+}
+
 inline std::vector<PlatformFontInfo>
 platform_enumerate_fonts()
 {

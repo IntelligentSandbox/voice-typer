@@ -267,6 +267,8 @@ query_font_names(GlobalState *AppState)
 	}
 }
 
+inline void query_paste_hotkey_overrides(GlobalState *AppState);
+
 inline void
 query_hotkey_settings(GlobalState *AppState)
 {
@@ -343,6 +345,96 @@ query_hotkey_settings(GlobalState *AppState)
 	{
 		if (UiFontSize >= 6 && UiFontSize <= 200) AppState->UiFontSize = UiFontSize;
 	}
+
+	query_paste_hotkey_overrides(AppState);
+}
+
+inline void
+query_paste_hotkey_overrides(GlobalState *AppState)
+{
+	AppState->PasteHotkeyOverrides.clear();
+
+	const std::string Prefix = PASTE_HOTKEY_OVERRIDE_SETTING_PREFIX;
+	const std::string ModSuffix = "_modifiers";
+
+	auto Map = read_settings_map();
+	for (const auto &Pair : Map)
+	{
+		if (Pair.first.compare(0, Prefix.size(), Prefix) != 0) continue;
+		if (Pair.first.size() <= Prefix.size() + ModSuffix.size()) continue;
+		if (Pair.first.compare(Pair.first.size() - ModSuffix.size(), ModSuffix.size(), ModSuffix) != 0) continue;
+
+		std::string ProcessName = Pair.first.substr(Prefix.size(),
+			Pair.first.size() - ModSuffix.size() - Prefix.size());
+		if (ProcessName.empty()) continue;
+
+		auto KeyIt = Map.find(Prefix + ProcessName + "_key");
+		if (KeyIt == Map.end()) continue;
+
+		int Modifiers = 0;
+		int Key = 0;
+		try
+		{
+			Modifiers = std::stoi(Pair.second);
+			Key = std::stoi(KeyIt->second);
+		}
+		catch (...)
+		{
+			continue;
+		}
+
+		PasteHotkeyOverride Override;
+		Override.ProcessName = ProcessName;
+		Override.Hotkey.Modifiers = (AppHotkeyModifiers)Modifiers;
+		Override.Hotkey.VirtualKey = (AppKeyCode)Key;
+		if (!Override.Hotkey.is_valid()) continue;
+
+		AppState->PasteHotkeyOverrides.push_back(Override);
+	}
+}
+
+inline void
+upsert_paste_hotkey_override(GlobalState *AppState, const std::string &ProcessName, HotkeyConfig Hotkey)
+{
+	bool Found = false;
+	{
+		std::lock_guard<std::mutex> Lock(AppState->PasteHotkeyOverridesMutex);
+		for (PasteHotkeyOverride &Override : AppState->PasteHotkeyOverrides)
+		{
+			if (ascii_equals_ci(Override.ProcessName, ProcessName))
+			{
+				Override.Hotkey = Hotkey;
+				Found = true;
+				break;
+			}
+		}
+
+		if (!Found)
+		{
+			PasteHotkeyOverride Override;
+			Override.ProcessName = ProcessName;
+			Override.Hotkey = Hotkey;
+			AppState->PasteHotkeyOverrides.push_back(Override);
+		}
+	}
+
+	save_paste_hotkey_override_setting(ProcessName, Hotkey);
+}
+
+inline void
+remove_paste_hotkey_override(GlobalState *AppState, const std::string &ProcessName)
+{
+	{
+		std::lock_guard<std::mutex> Lock(AppState->PasteHotkeyOverridesMutex);
+		for (size_t i = 0; i < AppState->PasteHotkeyOverrides.size(); )
+		{
+			if (ascii_equals_ci(AppState->PasteHotkeyOverrides[i].ProcessName, ProcessName))
+				AppState->PasteHotkeyOverrides.erase(AppState->PasteHotkeyOverrides.begin() + i);
+			else i++;
+		}
+	}
+
+	remove_paste_hotkey_override_setting(ProcessName);
 }
 
 inline bool

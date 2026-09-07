@@ -46,6 +46,45 @@ compute_rms(const float *Samples, int Count)
 	return (float)sqrt(Sum / (double)Count);
 }
 
+static bool
+paste_override_name_matches(const std::string &A, const std::string &B)
+{
+	if (A.size() != B.size()) return false;
+	for (size_t i = 0; i < A.size(); i++)
+	{
+		char Ca = (A[i] >= 'A' && A[i] <= 'Z') ? (char)(A[i] - 'A' + 'a') : A[i];
+		char Cb = (B[i] >= 'A' && B[i] <= 'Z') ? (char)(B[i] - 'A' + 'a') : B[i];
+		if (Ca != Cb) return false;
+	}
+	return true;
+}
+
+static HotkeyConfig
+resolve_paste_hotkey(GlobalState *AppState, void *TargetWindow)
+{
+	HotkeyConfig PasteHotkey = AppState->PasteHotkey;
+	if (!TargetWindow) return PasteHotkey;
+
+	std::string ProcessName = platform_get_window_process_name(TargetWindow);
+	if (ProcessName.empty()) return PasteHotkey;
+
+	std::vector<PasteHotkeyOverride> Overrides;
+	{
+		std::lock_guard<std::mutex> Lock(AppState->PasteHotkeyOverridesMutex);
+		Overrides = AppState->PasteHotkeyOverrides;
+	}
+
+	for (const PasteHotkeyOverride &Override : Overrides)
+	{
+		if (paste_override_name_matches(Override.ProcessName, ProcessName))
+		{
+			return Override.Hotkey;
+		}
+	}
+
+	return PasteHotkey;
+}
+
 static void
 run_whisper_on_chunk(GlobalState *AppState, whisper_full_params &Params, std::vector<float> &Chunk)
 {
@@ -81,12 +120,13 @@ run_whisper_on_chunk(GlobalState *AppState, whisper_full_params &Params, std::ve
 				platform_set_clipboard_text(&AppState->Platform, Transcription.c_str());
 		}
 		std::chrono::steady_clock::time_point PasteStart = std::chrono::steady_clock::now();
+		HotkeyConfig PasteHotkey = resolve_paste_hotkey(AppState, TargetWindow);
 		platform_inject_text(
 			&AppState->Platform,
 			TargetWindow,
 			Transcription.c_str(),
 			AppState->UseCharByCharInjection,
-			AppState->PasteHotkey);
+			PasteHotkey);
 		std::chrono::steady_clock::time_point PasteEnd = std::chrono::steady_clock::now();
 		double PasteMs = std::chrono::duration<double, std::milli>(PasteEnd - PasteStart).count();
 		AppState->LastPasteMs.store(PasteMs);

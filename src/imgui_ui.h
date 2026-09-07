@@ -199,6 +199,72 @@ settings_preview_sound(GlobalState *AppState, int FreqHz, bool Force)
 	S->LastPreviewTime = Now;
 }
 
+enum HotkeyCaptureResult
+{
+	HOTKEY_CAPTURE_ACTIVE    = 0,
+	HOTKEY_CAPTURE_CLEARED   = 1,
+	HOTKEY_CAPTURE_COMMITTED = 2,
+};
+
+// Advances an in-progress hotkey capture. Returns HOTKEY_CAPTURE_CLEARED when
+// Escape was pressed (callers clear or cancel their target) or
+// HOTKEY_CAPTURE_COMMITTED with *OutCaptured once every held key is released.
+static HotkeyCaptureResult
+poll_hotkey_capture(HotkeyCaptureState *Capture, HotkeyConfig *OutCaptured)
+{
+	ImGui::SetNextFrameWantCaptureKeyboard(true);
+	ImGui::ClearActiveID();
+
+	if (app_key_is_down(APP_KEY_ESCAPE))
+	{
+		Capture->HasCapture = false;
+		Capture->Captured = {};
+		Capture->IsCapturing = false;
+		Capture->PeakModifiers = 0;
+		Capture->PeakVirtualKey = 0;
+		Capture->ReleaseFrames = 0;
+		ImGui::ClearActiveID();
+		ImGui::SetNextFrameWantCaptureKeyboard(true);
+		return HOTKEY_CAPTURE_CLEARED;
+	}
+
+	AppHotkeyModifiers Mods = poll_modifier_state();
+	AppKeyCode Vk = poll_nonmodifier_key();
+
+	if (Mods != 0 || Vk != APP_KEY_NONE)
+	{
+		Capture->PeakModifiers |= Mods;
+		if (Vk != APP_KEY_NONE) Capture->PeakVirtualKey = Vk;
+		Capture->ReleaseFrames = 0;
+
+		Capture->Captured.Modifiers = Capture->PeakModifiers;
+		Capture->Captured.VirtualKey = Capture->PeakVirtualKey;
+		Capture->HasCapture = true;
+	}
+	else if (Capture->PeakModifiers != 0 || Capture->PeakVirtualKey != 0)
+	{
+		Capture->ReleaseFrames++;
+		if (Capture->ReleaseFrames >= 10)
+		{
+			Capture->Captured.Modifiers = Capture->PeakModifiers;
+			Capture->Captured.VirtualKey = Capture->PeakVirtualKey;
+			Capture->HasCapture = true;
+
+			Capture->IsCapturing = false;
+			Capture->PeakModifiers = 0;
+			Capture->PeakVirtualKey = 0;
+			Capture->ReleaseFrames = 0;
+			ImGui::ClearActiveID();
+			ImGui::SetNextFrameWantCaptureKeyboard(true);
+
+			*OutCaptured = Capture->Captured;
+			return HOTKEY_CAPTURE_COMMITTED;
+		}
+	}
+
+	return HOTKEY_CAPTURE_ACTIVE;
+}
+
 // ---------------------------------------------------------------------------
 // Update modal - floating window opened from the settings panel
 // ---------------------------------------------------------------------------
@@ -395,6 +461,27 @@ whisper_prompt_apply(GlobalState *AppState, const char *Prompt)
 		AppState->WhisperInitialPrompt = Trimmed;
 	}
 	save_string_setting("whisper_initial_prompt", Trimmed.c_str());
+}
+
+// Trims the input; returns "" when it is not a usable settings key fragment
+// (empty, too long, or containing characters the settings.ini parser cannot
+// round-trip).
+static std::string
+paste_override_process_name_from_input(const char *Input)
+{
+	std::string Name = Input ? Input : "";
+	size_t Start = Name.find_first_not_of(" \t");
+	size_t End = Name.find_last_not_of(" \t");
+	if (Start == std::string::npos) return "";
+	Name = Name.substr(Start, End - Start + 1);
+
+	if (Name.size() > 96) return "";
+	for (size_t i = 0; i < Name.size(); i++)
+	{
+		char Ch = Name[i];
+		if (Ch == '=' || Ch == '\n' || Ch == '\r') return "";
+	}
+	return Name;
 }
 
 struct FontNameInputNav
@@ -761,60 +848,19 @@ render_settings_panel(GlobalState *AppState)
 
 	if (S->Capture.IsCapturing)
 	{
-		ImGui::SetNextFrameWantCaptureKeyboard(true);
-		ImGui::ClearActiveID();
-
-		if (app_key_is_down(APP_KEY_ESCAPE))
+		HotkeyConfig Captured = {};
+		HotkeyCaptureResult CaptureResult = poll_hotkey_capture(&S->Capture, &Captured);
+		if (CaptureResult == HOTKEY_CAPTURE_CLEARED)
 		{
 			HotkeyConfig *H = settings_action_hotkey_ptr(AppState, S->SelectedAction);
 			if (H) *H = {};
 			settings_save_action_hotkey(AppState, S->SelectedAction);
-
-			S->Capture.HasCapture = false;
-			S->Capture.Captured = {};
-			S->Capture.IsCapturing = false;
-			S->Capture.PeakModifiers = 0;
-			S->Capture.PeakVirtualKey = 0;
-			S->Capture.ReleaseFrames = 0;
-			ImGui::ClearActiveID();
-			ImGui::SetNextFrameWantCaptureKeyboard(true);
 		}
-		else
+		else if (CaptureResult == HOTKEY_CAPTURE_COMMITTED)
 		{
-			AppHotkeyModifiers Mods = poll_modifier_state();
-			AppKeyCode Vk = poll_nonmodifier_key();
-
-			if (Mods != 0 || Vk != APP_KEY_NONE)
-			{
-				S->Capture.PeakModifiers |= Mods;
-				if (Vk != APP_KEY_NONE) S->Capture.PeakVirtualKey = Vk;
-				S->Capture.ReleaseFrames = 0;
-
-				S->Capture.Captured.Modifiers = S->Capture.PeakModifiers;
-				S->Capture.Captured.VirtualKey = S->Capture.PeakVirtualKey;
-				S->Capture.HasCapture = true;
-			}
-			else if (S->Capture.PeakModifiers != 0 || S->Capture.PeakVirtualKey != 0)
-			{
-				S->Capture.ReleaseFrames++;
-				if (S->Capture.ReleaseFrames >= 10)
-				{
-					S->Capture.Captured.Modifiers = S->Capture.PeakModifiers;
-					S->Capture.Captured.VirtualKey = S->Capture.PeakVirtualKey;
-					S->Capture.HasCapture = true;
-
-					HotkeyConfig *H = settings_action_hotkey_ptr(AppState, S->SelectedAction);
-					if (H) *H = S->Capture.Captured;
-					settings_save_action_hotkey(AppState, S->SelectedAction);
-
-					S->Capture.IsCapturing = false;
-					S->Capture.PeakModifiers = 0;
-					S->Capture.PeakVirtualKey = 0;
-					S->Capture.ReleaseFrames = 0;
-					ImGui::ClearActiveID();
-					ImGui::SetNextFrameWantCaptureKeyboard(true);
-				}
-			}
+			HotkeyConfig *H = settings_action_hotkey_ptr(AppState, S->SelectedAction);
+			if (H) *H = Captured;
+			settings_save_action_hotkey(AppState, S->SelectedAction);
 		}
 	}
 
@@ -862,6 +908,84 @@ render_settings_panel(GlobalState *AppState)
 	ImGui::TextWrapped(
 		"Select an action above, then click the box and press your desired combination. "
 		"Modifier-only combos (e.g. Ctrl+Alt) are supported. Escape clears the selected shortcut.");
+
+	ImGui::Separator();
+
+	ImGui::SetWindowFontScale(1.3f);
+	ImGui::Text("Per-Program Paste Hotkeys");
+	ImGui::SetWindowFontScale(1.0f);
+
+	ImGui::TextWrapped(
+		"Override the Paste Text hotkey for individual programs, matched by executable name "
+		"(e.g. Code.exe, WindowsTerminal.exe). Handy when one app needs a different paste shortcut.");
+
+	std::vector<PasteHotkeyOverride> Overrides;
+	{
+		std::lock_guard<std::mutex> Lock(AppState->PasteHotkeyOverridesMutex);
+		Overrides = AppState->PasteHotkeyOverrides;
+	}
+
+	std::string ForgetOverrideName;
+	for (const PasteHotkeyOverride &Override : Overrides)
+	{
+		ImGui::PushID(Override.ProcessName.c_str());
+		ImGui::Text("%s: %s", Override.ProcessName.c_str(), hotkey_to_label(Override.Hotkey).c_str());
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Forget")) ForgetOverrideName = Override.ProcessName;
+		ImGui::PopID();
+	}
+	if (!ForgetOverrideName.empty()) remove_paste_hotkey_override(AppState, ForgetOverrideName);
+
+	if (S->PasteOverrideCapture.IsCapturing)
+	{
+		HotkeyConfig Captured = {};
+		HotkeyCaptureResult CaptureResult = poll_hotkey_capture(&S->PasteOverrideCapture, &Captured);
+		if (CaptureResult == HOTKEY_CAPTURE_CLEARED)
+		{
+			S->PasteOverrideCaptureProcess.clear();
+		}
+		else if (CaptureResult == HOTKEY_CAPTURE_COMMITTED)
+		{
+			upsert_paste_hotkey_override(AppState, S->PasteOverrideCaptureProcess, Captured);
+			S->NewPasteOverrideProcess[0] = '\0';
+			S->PasteOverrideCaptureProcess.clear();
+		}
+	}
+
+	if (S->PasteOverrideCapture.IsCapturing)
+	{
+		std::string CaptureText;
+		if (S->PasteOverrideCapture.HasCapture)
+			CaptureText = hotkey_to_label(S->PasteOverrideCapture.Captured) + " for " +
+				S->PasteOverrideCaptureProcess + "...";
+		else
+			CaptureText = "Press a key combination for " + S->PasteOverrideCaptureProcess + "...";
+
+		if (colored_button(CaptureText.c_str(), ImVec2(-1.0f, 30.0f), ImVec4(0.08f, 0.40f, 0.75f, 1.0f)))
+		{
+			S->PasteOverrideCapture.IsCapturing = false;
+			S->PasteOverrideCaptureProcess.clear();
+		}
+		ImGui::TextWrapped("Escape cancels.");
+	}
+	else
+	{
+		ImGui::SetNextItemWidth(-1.0f);
+		ImGui::InputTextWithHint("##NewPasteOverrideProcess", "Program executable name, e.g. Code.exe",
+			S->NewPasteOverrideProcess, sizeof(S->NewPasteOverrideProcess));
+		std::string NewName = paste_override_process_name_from_input(S->NewPasteOverrideProcess);
+		if (colored_button("Set Paste Hotkey for Program...", ImVec2(-1.0f, 30.0f), BUTTON_COLOR_GREY,
+			!NewName.empty()))
+		{
+			S->PasteOverrideCaptureProcess = NewName;
+			S->PasteOverrideCapture.Captured = {};
+			S->PasteOverrideCapture.HasCapture = false;
+			S->PasteOverrideCapture.IsCapturing = true;
+			S->PasteOverrideCapture.PeakModifiers = 0;
+			S->PasteOverrideCapture.PeakVirtualKey = 0;
+			S->PasteOverrideCapture.ReleaseFrames = 0;
+		}
+	}
 
 	ImGui::Separator();
 

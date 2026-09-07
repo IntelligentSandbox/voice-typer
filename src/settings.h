@@ -27,6 +27,26 @@ load_hotkey_setting(const char *Name, int *OutModifiers, int *OutKey)
 	return true;
 }
 
+// Per-program paste hotkey overrides live as paste_hotkey_app_<process>_modifiers/_key
+// entries in settings.ini.
+#define PASTE_HOTKEY_OVERRIDE_SETTING_PREFIX "paste_hotkey_app_"
+
+inline void
+save_paste_hotkey_override_setting(const std::string &ProcessName, HotkeyConfig Hotkey)
+{
+	std::string Name = std::string(PASTE_HOTKEY_OVERRIDE_SETTING_PREFIX) + ProcessName;
+	save_hotkey_setting(Name.c_str(), (int)Hotkey.Modifiers, (int)Hotkey.VirtualKey);
+}
+
+inline void
+remove_paste_hotkey_override_setting(const std::string &ProcessName)
+{
+	auto Map = read_settings_map();
+	Map.erase(std::string(PASTE_HOTKEY_OVERRIDE_SETTING_PREFIX) + ProcessName + "_modifiers");
+	Map.erase(std::string(PASTE_HOTKEY_OVERRIDE_SETTING_PREFIX) + ProcessName + "_key");
+	write_settings_map(Map);
+}
+
 inline bool
 save_bool_setting(const char *Name, bool Value)
 {
