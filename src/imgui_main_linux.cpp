@@ -101,7 +101,8 @@ render_frame(SDL_Renderer *Renderer)
 	render_main_ui(g_AppState, Io);
 
 	ImGui::Render();
-	SDL_SetRenderDrawColor(Renderer, 25, 25, 25, 255);
+	if (g_AppState->Ui.LightMode) SDL_SetRenderDrawColor(Renderer, 240, 240, 240, 255);
+	else SDL_SetRenderDrawColor(Renderer, 25, 25, 25, 255);
 	SDL_RenderClear(Renderer);
 	ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), Renderer);
 	SDL_RenderPresent(Renderer);
@@ -163,7 +164,7 @@ main(int, char **)
 	Io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	Io.IniFilename = nullptr;
 
-	ImGui::StyleColorsDark();
+	apply_ui_theme(AppState);
 	Io.Fonts->AddFontDefault();
 
 	ImGui_ImplSDL2_InitForSDLRenderer(Window, Renderer);

@@ -293,6 +293,7 @@ struct UiRuntimeState
 	std::vector<char> TranscribedTextBoxBuffer;
 	int TranscribedTextBoxSerial;
 	bool FontReloadRequested;
+	bool LightMode;
 };
 
 struct GlobalState : CoreRuntimeState

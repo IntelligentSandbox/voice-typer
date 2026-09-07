@@ -763,6 +763,13 @@ platform_set_taskbar_icon(void *Window, const char *PngPath)
 }
 
 inline void
+platform_apply_window_theme(void *Window, bool LightMode)
+{
+	(void)Window;
+	(void)LightMode;
+}
+
+inline void
 platform_play_sound(PlatformRuntimeState *Platform, int FreqHz, int DurationMs)
 {
 	(void)Platform;

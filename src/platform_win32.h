@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <windows.h>
+#include <dwmapi.h>
 #include <mmsystem.h>
 #include <shellapi.h>
 #include <mmdeviceapi.h>
@@ -17,6 +18,7 @@
 #include <functiondiscoverykeys.h>
 #include <uiautomation.h>
 #pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "propsys.lib")
 #pragma comment(lib, "shell32.lib")
@@ -357,6 +359,19 @@ platform_set_taskbar_icon(void *Window, const char *PngPath)
 		SendMessageW(HWnd, WM_SETICON, ICON_BIG, (LPARAM)Icon);
 		SendMessageW(HWnd, WM_SETICON, ICON_SMALL, (LPARAM)Icon);
 	}
+}
+
+inline void
+platform_apply_window_theme(void *Window, bool LightMode)
+{
+	HWND HWnd = (HWND)Window;
+	if (!HWnd) return;
+
+	BOOL Dark = LightMode ? FALSE : TRUE;
+	DwmSetWindowAttribute(HWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &Dark, sizeof(Dark));
+
+	COLORREF CaptionColor = LightMode ? RGB(243, 243, 243) : RGB(26, 26, 26);
+	DwmSetWindowAttribute(HWnd, DWMWA_CAPTION_COLOR, &CaptionColor, sizeof(CaptionColor));
 }
 
 inline void

@@ -71,6 +71,8 @@ app_initialize_runtime(GlobalState *AppState, PlatformWindowHandle OwnWindow)
 	AppState->CopyToClipboardWhenNoTarget = false;
 	AppState->UiFontSize = 18;
 	AppState->Ui.FontReloadRequested = false;
+	AppState->Ui.LightMode = false;
+	load_bool_setting("ui_light_mode", &AppState->Ui.LightMode);
 	AppState->RecordHotkeyMode = default_recording_hotkey_mode();
 
 	AppState->LastModelLoadMs.store(-1.0);

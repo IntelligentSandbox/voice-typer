@@ -15,6 +15,7 @@ void *platform_get_foreground_window(PlatformRuntimeState *Platform);
 bool platform_window_has_focused_text_input(PlatformRuntimeState *Platform, void *Window);
 std::string platform_get_window_process_name(void *Window);
 void platform_set_taskbar_icon(void *Window, const char *PngPath);
+void platform_apply_window_theme(void *Window, bool LightMode);
 void platform_play_sound(PlatformRuntimeState *Platform, int FreqHz, int DurationMs);
 bool platform_is_key_down(AppKeyCode Key);
 std::string platform_get_exe_path();

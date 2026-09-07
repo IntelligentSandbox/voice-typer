@@ -154,6 +154,107 @@ hover_help_mark(const char *HelpText, const HelpMarkStyle &Style = help_mark_def
 }
 
 // ---------------------------------------------------------------------------
+// UI theme (light/dark)
+// ---------------------------------------------------------------------------
+static void
+apply_ui_theme(GlobalState *AppState)
+{
+	if (AppState->Ui.LightMode) ImGui::StyleColorsLight();
+	else ImGui::StyleColorsDark();
+}
+
+static void
+toggle_ui_theme(GlobalState *AppState)
+{
+	AppState->Ui.LightMode = !AppState->Ui.LightMode;
+	save_bool_setting("ui_light_mode", AppState->Ui.LightMode);
+	apply_ui_theme(AppState);
+	platform_apply_window_theme(AppState->Platform.OwnWindow, AppState->Ui.LightMode);
+}
+
+// ---------------------------------------------------------------------------
+// Theme toggle: small Sun/Moon button. It always shows the mode clicking will
+// switch TO: a sun while in dark mode, a moon while in light mode.
+// ---------------------------------------------------------------------------
+static void
+theme_toggle_button(GlobalState *AppState)
+{
+	float FontSize = ImGui::GetFontSize();
+	float Diameter = FontSize * 1.35f;
+
+	if (ImGui::InvisibleButton("##ThemeToggle", ImVec2(Diameter, Diameter)))
+	{
+		toggle_ui_theme(AppState);
+	}
+
+	bool Hovered = ImGui::IsItemHovered();
+	ImDrawList *Draw = ImGui::GetWindowDrawList();
+	ImVec2 Pos = ImGui::GetItemRectMin();
+	ImVec2 Center = ImVec2(Pos.x + Diameter * 0.5f, Pos.y + Diameter * 0.5f);
+	float Thickness = ImMax(1.5f, FontSize * 0.09f);
+	const float Pi = 3.14159265f;
+
+	if (Hovered)
+	{
+		Draw->AddCircleFilled(Center, Diameter * 0.62f,
+			ImGui::GetColorU32(ImGuiCol_ButtonHovered, 0.35f));
+	}
+
+	if (AppState->Ui.LightMode)
+	{
+		// Moon: crescent outline from two arcs that meet at the cusps. The
+		// outer arc wraps the left side of the circle; the inner arc (from a
+		// center offset to the right) carves the bite, also via its left side.
+		ImVec4 Color = Hovered ? ImVec4(0.13f, 0.16f, 0.35f, 1.0f)
+			: ImVec4(0.30f, 0.34f, 0.52f, 1.0f);
+		ImU32 Color32 = ImGui::ColorConvertFloat4ToU32(Color);
+
+		float R = Diameter * 0.36f;
+		float CuspX = 0.5f;   // cos(60 deg)
+		float CuspY = 0.866f; // sin(60 deg)
+		ImVec2 CuspTop = ImVec2(Center.x + R * CuspX, Center.y - R * CuspY);
+		ImVec2 CuspBottom = ImVec2(Center.x + R * CuspX, Center.y + R * CuspY);
+		ImVec2 InnerC = ImVec2(Center.x + R * 0.62f, Center.y);
+		float InnerR = sqrtf(
+			(CuspTop.x - InnerC.x) * (CuspTop.x - InnerC.x) +
+			(CuspTop.y - InnerC.y) * (CuspTop.y - InnerC.y));
+		float InnerTopA = atan2f(CuspTop.y - InnerC.y, CuspTop.x - InnerC.x);
+		float InnerBottomA = atan2f(CuspBottom.y - InnerC.y, CuspBottom.x - InnerC.x);
+
+		Draw->PathArcTo(Center, R, Pi / 3.0f, Pi * 5.0f / 3.0f);
+		Draw->PathStroke(Color32, 0, Thickness);
+		Draw->PathArcTo(InnerC, InnerR, InnerBottomA - Pi * 2.0f, InnerTopA);
+		Draw->PathStroke(Color32, 0, Thickness);
+	}
+	else
+	{
+		// Sun: filled disc with eight rays.
+		ImVec4 Color = Hovered ? ImVec4(1.0f, 0.85f, 0.35f, 1.0f)
+			: ImVec4(0.95f, 0.75f, 0.2f, 1.0f);
+		ImU32 Color32 = ImGui::ColorConvertFloat4ToU32(Color);
+
+		float R = Diameter * 0.42f;
+		Draw->AddCircleFilled(Center, R * 0.45f, Color32);
+		for (int i = 0; i < 8; i++)
+		{
+			float A = (float)i * (Pi * 2.0f / 8.0f);
+			Draw->AddLine(
+				ImVec2(Center.x + cosf(A) * R * 0.62f, Center.y + sinf(A) * R * 0.62f),
+				ImVec2(Center.x + cosf(A) * R * 0.88f, Center.y + sinf(A) * R * 0.88f),
+				Color32, Thickness);
+		}
+	}
+
+	if (Hovered)
+	{
+		ImGui::BeginTooltip();
+		ImGui::TextUnformatted(
+			AppState->Ui.LightMode ? "Switch to dark mode" : "Switch to light mode");
+		ImGui::EndTooltip();
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Combo helper for std::vector<std::string>
 // ---------------------------------------------------------------------------
 static bool
@@ -770,6 +871,11 @@ render_settings_panel(GlobalState *AppState)
 	{
 		save_bool_setting("play_record_sound", AppState->PlayRecordSound);
 	}
+
+	ImGui::SameLine();
+	float ThemeButtonSize = ImGui::GetFontSize() * 1.35f;
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - ThemeButtonSize);
+	theme_toggle_button(AppState);
 
 	if (AppState->PlayRecordSound)
 	{

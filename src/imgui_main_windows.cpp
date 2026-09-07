@@ -328,7 +328,13 @@ render_frame()
 	render_main_ui(g_AppState, Io);
 
 	ImGui::Render();
-	const float ClearColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
+	float ClearColor[4] = {0.1f, 0.1f, 0.1f, 1.0f};
+	if (g_AppState->Ui.LightMode)
+	{
+		ClearColor[0] = 0.94f;
+		ClearColor[1] = 0.94f;
+		ClearColor[2] = 0.94f;
+	}
 	g_DeviceContext->OMSetRenderTargets(1, &g_RenderTargetView, nullptr);
 	g_DeviceContext->ClearRenderTargetView(g_RenderTargetView, ClearColor);
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -471,10 +477,9 @@ WinMain(HINSTANCE Instance, HINSTANCE /*PrevInstance*/, LPSTR /*CmdLine*/, int /
 
 	if (!Hwnd) return 1;
 
-	BOOL DarkMode = TRUE;
-	DwmSetWindowAttribute(Hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &DarkMode, sizeof(DarkMode));
-	COLORREF CaptionColor = RGB(26, 26, 26);
-	DwmSetWindowAttribute(Hwnd, DWMWA_CAPTION_COLOR, &CaptionColor, sizeof(CaptionColor));
+	bool LightMode = false;
+	load_bool_setting("ui_light_mode", &LightMode);
+	platform_apply_window_theme(Hwnd, LightMode);
 
 	if (!create_device_d3d(Hwnd))
 	{
@@ -506,7 +511,7 @@ WinMain(HINSTANCE Instance, HINSTANCE /*PrevInstance*/, LPSTR /*CmdLine*/, int /
 	Io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	Io.IniFilename = nullptr;
 
-	ImGui::StyleColorsDark();
+	apply_ui_theme(AppState);
 
 	win32_load_font_atlas(AppState);
 
