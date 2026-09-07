@@ -1575,17 +1575,15 @@ render_transcribed_text_box(GlobalState *AppState)
 	std::vector<ImVec4> WordRects;
 	WordRects.reserve(Ui->TranscribedTextBoxWords.size());
 
-	if (ImGui::BeginChild("##TranscribedTextConfidence", ImVec2(-1.0f, BoxHeight), ImGuiChildFlags_Borders))
+	if (ImGui::BeginChild("##TranscribedTextConfidence", ImVec2(-1.0f, BoxHeight),
+		ImGuiChildFlags_AlwaysUseWindowPadding))
 	{
-		// Gate interaction on raw mouse-rect math instead of IsWindowHovered(),
-		// whose hover/active-id blocking rules would drop clicks mid-drag.
-		const ImVec2 ChildMin = ImGui::GetWindowPos();
-		const ImVec2 ChildSize = ImGui::GetWindowSize();
-		ImVec2 ChildMax = ImVec2(ChildMin.x + ChildSize.x, ChildMin.y + ChildSize.y);
-		if (ImGui::GetScrollMaxY() > 0.0f) ChildMax.x -= ImGui::GetStyle().ScrollbarSize;
+		// AllowWhenBlockedByActiveItem keeps hover alive mid-drag (the reason
+		// raw mouse-rect math was used before), while IsWindowHovered() still
+		// reports false when a modal/popup is open or a higher window (e.g. a
+		// modal sitting on top of the box) covers the pointer.
+		const bool WindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 		const ImVec2 Mouse = ImGui::GetMousePos();
-		const bool MouseInBox = Mouse.x >= ChildMin.x && Mouse.x < ChildMax.x &&
-			Mouse.y >= ChildMin.y && Mouse.y < ChildMax.y;
 		const int WordCount = (int)Ui->TranscribedTextBoxWords.size();
 
 		// Match the InputTextMultiline line pitch (no spacing between wrapped lines)
@@ -1614,7 +1612,7 @@ render_transcribed_text_box(GlobalState *AppState)
 		}
 		ImGui::PopStyleVar();
 
-		const bool MouseOverText = MouseInBox && WordCount > 0 &&
+		const bool MouseOverText = WindowHovered && WordCount > 0 &&
 			transcribed_text_pos_over_text(WordRects, Mouse);
 
 		if (MouseOverText) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
