@@ -113,11 +113,35 @@ hover_help_mark(const char *HelpText, const HelpMarkStyle &Style = help_mark_def
 
 	ImU32 Color32 = ImGui::ColorConvertFloat4ToU32(Hovered ? Style.HoverColor : Style.MarkColor);
 	ImVec2 Center = ImVec2(Pos.x + Diameter * 0.5f, Pos.y + FontSize * 0.5f);
-	ImGui::GetWindowDrawList()->AddCircle(Center, Diameter * 0.5f, Color32, 16, Style.OutlineThickness);
+	ImDrawList *Draw = ImGui::GetWindowDrawList();
+	Draw->AddCircle(Center, Diameter * 0.5f, Color32, 16, Style.OutlineThickness);
 
-	ImVec2 GlyphSize = ImGui::CalcTextSize("?");
-	ImGui::GetWindowDrawList()->AddText(
-		ImVec2(Center.x - GlyphSize.x * 0.5f, Center.y - GlyphSize.y * 0.5f), Color32, "?");
+	// Hand-drawn '?' with a strictly vertical stem so it never inherits any
+	// slant from the loaded font: a top bowl arc, a hook curving into a
+	// vertical stem, and a dot below.
+	const float Pi = 3.14159265f;
+	float GlyphH = Diameter * 0.55f;
+	float BowlR = GlyphH * 0.26f;
+	ImVec2 BowlCenter = ImVec2(Center.x, Center.y - GlyphH * 0.5f + BowlR);
+	ImVec2 HookCenter = ImVec2(Center.x + BowlR * 0.45f, BowlCenter.y + BowlR * 0.50f);
+	float BowlA0 = Pi * 165.0f / 180.0f;
+	float BowlA1 = Pi * 15.0f / 180.0f + Pi * 2.0f;
+	ImVec2 BowlEnd = ImVec2(BowlCenter.x + BowlR * cosf(BowlA1), BowlCenter.y + BowlR * sinf(BowlA1));
+	float HookDx = BowlEnd.x - HookCenter.x;
+	float HookDy = BowlEnd.y - HookCenter.y;
+	float HookR = sqrtf(HookDx * HookDx + HookDy * HookDy);
+	float HookA0 = atan2f(HookDy, HookDx);
+	ImVec2 StemTop = ImVec2(Center.x, BowlCenter.y + BowlR * 0.85f);
+	float HookA1 = atan2f(StemTop.y - HookCenter.y, StemTop.x - HookCenter.x);
+	ImVec2 StemBottom = ImVec2(Center.x, StemTop.y + GlyphH * 0.24f);
+	ImVec2 DotCenter = ImVec2(Center.x, StemBottom.y + GlyphH * 0.17f);
+
+	Draw->PathArcTo(BowlCenter, BowlR, BowlA0, BowlA1);
+	Draw->PathStroke(Color32, 0, Style.OutlineThickness);
+	Draw->PathArcTo(HookCenter, HookR, HookA0, HookA1);
+	Draw->PathStroke(Color32, 0, Style.OutlineThickness);
+	Draw->AddLine(StemTop, StemBottom, Color32, Style.OutlineThickness);
+	Draw->AddCircleFilled(DotCenter, GlyphH * 0.07f, Color32);
 
 	if (Hovered)
 	{
