@@ -620,6 +620,7 @@ render_font_name_input(GlobalState *AppState)
 	SettingsWindowState *S = &AppState->Ui.SettingsState;
 
 	ImGui::TextUnformatted("Font");
+	ImGui::SameLine();
 	ImGui::SetNextItemWidth(-1.0f);
 
 	// CallbackHistory makes the InputText claim the Up/Down arrow keys so
@@ -858,12 +859,11 @@ render_settings_panel(GlobalState *AppState)
 		save_int_setting("record_hotkey_mode", (int)AppState->RecordHotkeyMode);
 	}
 
-	ImGui::Separator();
 	render_font_name_input(AppState);
 
 	float NumInputWidth = ImGui::GetFontSize() * 5.5f;
 
-	ImGui::TextUnformatted("Font size:");
+	ImGui::TextUnformatted("Font size");
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(NumInputWidth);
 	if (ImGui::InputInt("##UiFontSize", &AppState->UiFontSize, 1, 1))
@@ -873,7 +873,7 @@ render_settings_panel(GlobalState *AppState)
 		save_int_setting("ui_font_size", AppState->UiFontSize);
 	}
 
-	ImGui::Text("CPU Cores for Inference:");
+    ImGui::Text("CPU Cores for Inference");
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(NumInputWidth);
 	int MaxCores = query_logical_processor_count();
@@ -883,24 +883,23 @@ render_settings_panel(GlobalState *AppState)
 		if (AppState->WhisperThreadCount > MaxCores) AppState->WhisperThreadCount = MaxCores;
 	}
 
-	ImGui::Separator();
-
 	ImGui::TextUnformatted("Initial Whisper Prompt");
+	ImGui::SameLine();
+	HelpMarkStyle InitialWhisperPromptMarkStyle = help_mark_default_style();
+	InitialWhisperPromptMarkStyle.DiameterScale = 0.75f;
+	hover_help_mark(
+		"Guides the transcription model toward the vocabulary and style you use. "
+		"Applied from the next recording or streaming session onwards. (e.g. \"C++, ImGui, ggml, CUDA...\")",
+		InitialWhisperPromptMarkStyle);
 	ImGui::SetNextItemWidth(-1.0f);
 	ImGui::InputTextWithHint("##WhisperInitialPrompt",
-		"Vocabulary/style hint, e.g. \"C++, ImGui, ggml, CUDA...\"",
+		"Vocabulary/style hint",
 		S->WhisperPromptBuffer, sizeof(S->WhisperPromptBuffer));
 	if (ImGui::IsItemDeactivated())
 	{
 		whisper_prompt_apply(AppState, S->WhisperPromptBuffer);
 	}
-	ImGui::TextWrapped(
-		"Guides the transcription model toward the vocabulary and style you use. "
-		"Applied from the next recording or streaming session onwards.");
 
-	ImGui::Separator();
-
-	ImGui::SetWindowFontScale(1.3f);
 	ImGui::Text("Keyboard Shortcuts");
 	ImGui::SameLine();
 	HelpMarkStyle ShortcutsMarkStyle = help_mark_default_style();
@@ -909,7 +908,6 @@ render_settings_panel(GlobalState *AppState)
 		"Select an action below, then click the box and press your desired combination. "
 		"Modifier-only combos (e.g. Ctrl+Alt) are supported. Escape clears the selected shortcut.",
 		ShortcutsMarkStyle);
-	ImGui::SetWindowFontScale(1.0f);
 
 	float AvailWidth = ImGui::GetContentRegionAvail().x;
 	float Spacing = ImGui::GetStyle().ItemSpacing.x;
@@ -1157,11 +1155,16 @@ render_paste_override_modal(GlobalState *AppState)
 
 		ImGui::TextUnformatted("Configured Hotkeys");
 		ImGui::SameLine();
+
+        HelpMarkStyle HotkeyMarkStyle = help_mark_default_style();
+        HotkeyMarkStyle.DiameterScale = 0.75f;
 		hover_help_mark(
-			"Override the Paste Text hotkey for individual programs, matched by executable name "
-			"(e.g. Code.exe, WindowsTerminal.exe). Handy when one app needs a different paste shortcut. "
-			"Click a shortcut to change it, X to remove it.");
+			"Override the Paste Text hotkey for individual programs, matched by executable name. "
+			"Handy when one app needs a different paste shortcut. "
+			"Click a shortcut to change it, X to remove it.",
+            HotkeyMarkStyle);
 		ImGui::Spacing();
+		ImGui::Separator();
 
 		std::vector<PasteHotkeyOverride> Overrides;
 		{
@@ -1245,7 +1248,7 @@ render_paste_override_modal(GlobalState *AppState)
 		else
 		{
 			ImGui::SetNextItemWidth(-1.0f);
-			ImGui::InputTextWithHint("##NewPasteOverrideProcess", "Program executable name, e.g. Code.exe",
+			ImGui::InputTextWithHint("##NewPasteOverrideProcess", "Program executable name (e.g. Code.exe, WindowsTerminal.exe)",
 				S->NewPasteOverrideProcess, sizeof(S->NewPasteOverrideProcess));
 			std::string NewName = paste_override_process_name_from_input(S->NewPasteOverrideProcess);
 			if (colored_button("Set Paste Hotkey for Program...", ImVec2(-1.0f, 30.0f), BUTTON_COLOR_GREY,

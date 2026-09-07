@@ -1,4 +1,7 @@
 #include "state.h"
+#include "host_services.h"
+#include "settings.h"
+#include "ggml-backend.h"
 
 #include <algorithm>
 #include <chrono>
@@ -73,12 +76,6 @@ query_logical_processor_count()
 	unsigned int Count = std::thread::hardware_concurrency();
 	return (Count > 0) ? (int)Count : 1;
 }
-
-#include "host_services.h"
-
-#include "settings.h"
-
-#include "ggml-backend.h"
 
 // ---------------------------------------------------------------------------
 // System queries
