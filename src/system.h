@@ -334,6 +334,10 @@ query_hotkey_settings(GlobalState *AppState)
 	std::string UiFontName;
 	if (load_string_setting("ui_font_name", &UiFontName)) AppState->UiFontName = UiFontName;
 
+	std::string WhisperInitialPrompt;
+	if (load_string_setting("whisper_initial_prompt", &WhisperInitialPrompt))
+		AppState->WhisperInitialPrompt = WhisperInitialPrompt;
+
 	int UiFontSize = 0;
 	if (load_int_setting("ui_font_size", &UiFontSize))
 	{

@@ -18,7 +18,8 @@ vad_model_file_available(const char *VadModelPath)
 }
 
 inline whisper_full_params
-make_transcription_whisper_params(int ThreadCount, bool EnableVad, const char *VadModelPath)
+make_transcription_whisper_params(int ThreadCount, bool EnableVad, const char *VadModelPath,
+	const char *InitialPrompt = nullptr)
 {
 	whisper_full_params Params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
 	Params.language         = "en";
@@ -29,6 +30,14 @@ make_transcription_whisper_params(int ThreadCount, bool EnableVad, const char *V
 	Params.print_special    = false;
 	Params.print_timestamps = false;
 	Params.n_threads        = ThreadCount;
+
+	// With no_context = true, whisper_full clears the prompt history at the
+	// start of every call and re-seeds it from initial_prompt, so the hint is
+	// applied to each record take / streaming chunk independently.
+	if (InitialPrompt && InitialPrompt[0] != '\0')
+	{
+		Params.initial_prompt = InitialPrompt;
+	}
 
 	if (EnableVad && !vad_model_file_available(VadModelPath))
 	{

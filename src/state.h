@@ -55,6 +55,8 @@ struct SettingsWindowState
 	bool FontNameBufferInitialized;
 	int FontSuggestionIndex;
 	int FontSuggestionMatchCount;
+	char WhisperPromptBuffer[512];
+	bool WhisperPromptBufferInitialized;
 };
 
 struct ModelDownloadState
@@ -241,6 +243,12 @@ struct CoreRuntimeState
 
 	// Inference threading
 	int WhisperThreadCount;
+
+	// Whisper initial prompt (vocabulary/style hint). Guarded by
+	// WhisperInitialPromptMutex: written by the UI thread, copied by pipeline
+	// threads when they build their whisper_full_params.
+	std::string WhisperInitialPrompt;
+	std::mutex WhisperInitialPromptMutex;
 
 	// UI font
 	std::string UiFontName;

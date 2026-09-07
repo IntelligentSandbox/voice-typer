@@ -40,6 +40,8 @@ app_initialize_runtime(GlobalState *AppState, PlatformWindowHandle OwnWindow)
 	AppState->Ui.SettingsState.FontNameBufferInitialized = false;
 	AppState->Ui.SettingsState.FontSuggestionIndex = -1;
 	AppState->Ui.SettingsState.FontSuggestionMatchCount = 0;
+	AppState->Ui.SettingsState.WhisperPromptBuffer[0] = '\0';
+	AppState->Ui.SettingsState.WhisperPromptBufferInitialized = false;
 	AppState->Ui.SettingsState.Capture.Captured = AppState->RecordHotkey;
 	AppState->Ui.SettingsState.Capture.HasCapture = AppState->RecordHotkey.is_valid();
 	AppState->Ui.SettingsState.Capture.IsCapturing = false;
@@ -83,6 +85,14 @@ app_initialize_runtime(GlobalState *AppState, PlatformWindowHandle OwnWindow)
 			sizeof(AppState->Ui.SettingsState.FontNameBuffer) - 1);
 		AppState->Ui.SettingsState.FontNameBuffer[sizeof(AppState->Ui.SettingsState.FontNameBuffer) - 1] = '\0';
 		AppState->Ui.SettingsState.FontNameBufferInitialized = true;
+	}
+
+	if (!AppState->Ui.SettingsState.WhisperPromptBufferInitialized)
+	{
+		strncpy(AppState->Ui.SettingsState.WhisperPromptBuffer, AppState->WhisperInitialPrompt.c_str(),
+			sizeof(AppState->Ui.SettingsState.WhisperPromptBuffer) - 1);
+		AppState->Ui.SettingsState.WhisperPromptBuffer[sizeof(AppState->Ui.SettingsState.WhisperPromptBuffer) - 1] = '\0';
+		AppState->Ui.SettingsState.WhisperPromptBufferInitialized = true;
 	}
 
 	// GGML_BACKEND_DL builds ship the CPU backend as a separate ggml-cpu.dll

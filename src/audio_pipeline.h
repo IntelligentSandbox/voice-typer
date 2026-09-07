@@ -223,10 +223,17 @@ stream_segment_thread(GlobalState *AppState, StreamingChunkQueue *Queue)
 static void
 stream_infer_thread(GlobalState *AppState, StreamingChunkQueue *Queue)
 {
+	std::string InitialPrompt;
+	{
+		std::lock_guard<std::mutex> Lock(AppState->WhisperInitialPromptMutex);
+		InitialPrompt = AppState->WhisperInitialPrompt;
+	}
+
 	whisper_full_params Params = make_transcription_whisper_params(
 		AppState->WhisperThreadCount,
 		VOICETYPER_STREAMING_WHISPER_VAD != 0,
-		AppState->VadModelPath.c_str());
+		AppState->VadModelPath.c_str(),
+		InitialPrompt.empty() ? nullptr : InitialPrompt.c_str());
 	Params.single_segment      = true;
 
 	for (;;)
@@ -282,10 +289,17 @@ record_pipeline_thread(GlobalState *AppState, int DeviceIndex)
 
 	if (!Cancelled && !Chunk.empty())
 	{
+		std::string InitialPrompt;
+		{
+			std::lock_guard<std::mutex> Lock(AppState->WhisperInitialPromptMutex);
+			InitialPrompt = AppState->WhisperInitialPrompt;
+		}
+
 		whisper_full_params Params = make_transcription_whisper_params(
 			AppState->WhisperThreadCount,
 			VOICETYPER_RECORD_WHISPER_VAD != 0,
-			AppState->VadModelPath.c_str());
+			AppState->VadModelPath.c_str(),
+			InitialPrompt.empty() ? nullptr : InitialPrompt.c_str());
 		Params.single_segment      = false;
 
 		run_whisper_on_chunk(AppState, Params, Chunk);

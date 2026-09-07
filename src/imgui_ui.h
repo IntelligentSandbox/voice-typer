@@ -381,6 +381,22 @@ font_name_apply(GlobalState *AppState, const char *Name)
 	AppState->Ui.FontReloadRequested = true;
 }
 
+static void
+whisper_prompt_apply(GlobalState *AppState, const char *Prompt)
+{
+	std::string Trimmed = Prompt ? Prompt : "";
+	size_t Start = Trimmed.find_first_not_of(" \t");
+	size_t End = Trimmed.find_last_not_of(" \t");
+	if (Start == std::string::npos) Trimmed.clear();
+	else Trimmed = Trimmed.substr(Start, End - Start + 1);
+
+	{
+		std::lock_guard<std::mutex> Lock(AppState->WhisperInitialPromptMutex);
+		AppState->WhisperInitialPrompt = Trimmed;
+	}
+	save_string_setting("whisper_initial_prompt", Trimmed.c_str());
+}
+
 struct FontNameInputNav
 {
 	SettingsWindowState *S;
@@ -702,6 +718,21 @@ render_settings_panel(GlobalState *AppState)
 		if (AppState->WhisperThreadCount < 1) AppState->WhisperThreadCount = 1;
 		if (AppState->WhisperThreadCount > MaxCores) AppState->WhisperThreadCount = MaxCores;
 	}
+
+	ImGui::Separator();
+
+	ImGui::TextUnformatted("Initial Whisper Prompt");
+	ImGui::SetNextItemWidth(-1.0f);
+	ImGui::InputTextWithHint("##WhisperInitialPrompt",
+		"Vocabulary/style hint, e.g. \"C++, ImGui, ggml, CUDA...\"",
+		S->WhisperPromptBuffer, sizeof(S->WhisperPromptBuffer));
+	if (ImGui::IsItemDeactivated())
+	{
+		whisper_prompt_apply(AppState, S->WhisperPromptBuffer);
+	}
+	ImGui::TextWrapped(
+		"Guides the transcription model toward the vocabulary and style you use. "
+		"Applied from the next recording or streaming session onwards.");
 
 	ImGui::Separator();
 
