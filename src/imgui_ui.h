@@ -1083,6 +1083,7 @@ render_paste_override_modal(GlobalState *AppState)
 
 		ImGui::Spacing();
 		ImGui::TextUnformatted("Configured overrides:");
+		ImGui::TextDisabled("Click a shortcut to change it, X to remove it.");
 		ImGui::PopTextWrapPos();
 
 		std::vector<PasteHotkeyOverride> Overrides;
@@ -1100,12 +1101,35 @@ render_paste_override_modal(GlobalState *AppState)
 		for (const PasteHotkeyOverride &Override : Overrides)
 		{
 			ImGui::PushID(Override.ProcessName.c_str());
-			ImGui::Text("%s: %s", Override.ProcessName.c_str(), hotkey_to_label(Override.Hotkey).c_str());
+			ImGui::TextUnformatted(Override.ProcessName.c_str());
 			ImGui::SameLine();
-			if (ImGui::SmallButton("Forget")) ForgetOverrideName = Override.ProcessName;
+			std::string ChangeLabel = hotkey_to_label(Override.Hotkey) + "##Change";
+			if (colored_button(ChangeLabel.c_str(), ImVec2(0.0f, 0.0f), BUTTON_COLOR_GREY))
+			{
+				S->PasteOverrideCaptureProcess = Override.ProcessName;
+				S->PasteOverrideCapture.Captured = {};
+				S->PasteOverrideCapture.HasCapture = false;
+				S->PasteOverrideCapture.IsCapturing = true;
+				S->PasteOverrideCapture.PeakModifiers = 0;
+				S->PasteOverrideCapture.PeakVirtualKey = 0;
+				S->PasteOverrideCapture.ReleaseFrames = 0;
+			}
+			ImGui::SameLine();
+			if (colored_button("X##Forget", ImVec2(0.0f, 0.0f), BUTTON_COLOR_RED))
+			{
+				ForgetOverrideName = Override.ProcessName;
+			}
 			ImGui::PopID();
 		}
-		if (!ForgetOverrideName.empty()) remove_paste_hotkey_override(AppState, ForgetOverrideName);
+		if (!ForgetOverrideName.empty())
+		{
+			if (S->PasteOverrideCapture.IsCapturing && S->PasteOverrideCaptureProcess == ForgetOverrideName)
+			{
+				S->PasteOverrideCapture.IsCapturing = false;
+				S->PasteOverrideCaptureProcess.clear();
+			}
+			remove_paste_hotkey_override(AppState, ForgetOverrideName);
+		}
 
 		ImGui::Separator();
 
