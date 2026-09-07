@@ -10,6 +10,7 @@ struct WhisperModelState
 	whisper_context *Context;
 	bool IsLoaded;
 	int LoadedModelIndex;
+	int LoadedInferenceDeviceIndex;
 	std::string ModelPath;
 };
 
@@ -19,6 +20,7 @@ init_whisper_state(WhisperModelState *State)
 	State->Context = nullptr;
 	State->IsLoaded = false;
 	State->LoadedModelIndex = -1;
+	State->LoadedInferenceDeviceIndex = -1;
 	State->ModelPath = "";
 }
 
@@ -70,6 +72,7 @@ load_whisper_model(WhisperModelState *State, const char *ModelPath,
 
 	State->IsLoaded = true;
 	State->LoadedModelIndex = ModelIndex;
+	State->LoadedInferenceDeviceIndex = InferenceDeviceIndex;
 	State->ModelPath = ModelPath;
 
 	return true;
@@ -84,6 +87,7 @@ unload_whisper_model(WhisperModelState *State)
 	State->Context = nullptr;
 	State->IsLoaded = false;
 	State->LoadedModelIndex = -1;
+	State->LoadedInferenceDeviceIndex = -1;
 	State->ModelPath = "";
 }
 

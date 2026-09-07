@@ -208,6 +208,8 @@ struct CoreRuntimeState
 	// Logic
 	bool IsRecording;
 	bool IsStreaming;
+	bool PendingRecordOnModelLoad;
+	bool PendingStreamOnModelLoad;
 	std::atomic<bool> IsModelTransitioning;
 	std::atomic<bool> ExitRequested = false;
 	bool PlayRecordSound;

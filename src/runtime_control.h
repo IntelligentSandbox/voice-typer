@@ -2,10 +2,13 @@
 
 #include "state.h"
 #include "audio_pipeline.h"
+#include "input.h"
 #include "settings.h"
 #include "sounds.h"
 
 #include <chrono>
+
+inline void runtime_start_pending_pipelines(GlobalState *AppState);
 
 inline void
 runtime_update_audio_input_selection(GlobalState *AppState, int Index)
@@ -51,8 +54,15 @@ runtime_finish_model_transition(GlobalState *AppState)
 
 	AppState->ModelTransitionThread.join();
 
-	return (ModelTransitionFailure)AppState->ModelTransitionFailureCode.exchange(
+	ModelTransitionFailure Failure = (ModelTransitionFailure)AppState->ModelTransitionFailureCode.exchange(
 		(int)MODEL_TRANSITION_FAILURE_NONE);
+
+	if (Failure == MODEL_TRANSITION_FAILURE_NONE)
+	{
+		runtime_start_pending_pipelines(AppState);
+	}
+
+	return Failure;
 }
 
 inline bool
@@ -107,7 +117,11 @@ runtime_update_inference_device_selection(GlobalState *AppState, int Index)
 
 	if (!is_whisper_model_loaded(&AppState->WhisperState)) return MODEL_TRANSITION_FAILURE_NONE;
 
-	if (AppState->IsModelTransitioning.load() || AppState->PipelineActive.load()) return MODEL_TRANSITION_FAILURE_NONE;
+	if (AppState->IsModelTransitioning.load() || AppState->PipelineActive.load() ||
+		AppState->PendingRecordOnModelLoad || AppState->PendingStreamOnModelLoad)
+	{
+		return MODEL_TRANSITION_FAILURE_NONE;
+	}
 
 	if (AppState->CaptureThread.joinable()) AppState->CaptureThread.join();
 
@@ -147,6 +161,7 @@ runtime_update_stt_model_selection(GlobalState *AppState, int Index)
 	if (!is_whisper_model_loaded(&AppState->WhisperState)) return MODEL_TRANSITION_FAILURE_NONE;
 	if (AppState->WhisperState.LoadedModelIndex == Index) return MODEL_TRANSITION_FAILURE_NONE;
 	if (AppState->IsModelTransitioning.load()) return MODEL_TRANSITION_FAILURE_NONE;
+	if (AppState->PendingRecordOnModelLoad || AppState->PendingStreamOnModelLoad) return MODEL_TRANSITION_FAILURE_NONE;
 	if (AppState->PipelineActive.load()) return MODEL_TRANSITION_FAILURE_NONE;
 
 	if (AppState->CaptureThread.joinable()) AppState->CaptureThread.join();
@@ -162,13 +177,59 @@ runtime_update_stt_model_selection(GlobalState *AppState, int Index)
 }
 
 inline bool
+runtime_model_matches_selection(GlobalState *AppState)
+{
+	if (!is_whisper_model_loaded(&AppState->WhisperState)) return false;
+	if (AppState->WhisperState.LoadedModelIndex != AppState->CurrentSTTModelIndex) return false;
+	if (AppState->WhisperState.LoadedInferenceDeviceIndex != AppState->CurrentInferenceDeviceIndex) return false;
+	return true;
+}
+
+// The user hit the Record/Stream hotkey but the selected model is not loaded
+// on the selected inference device. Load it on the model-transition thread and
+// start the requested pipeline once the load succeeds (see
+// runtime_start_pending_pipelines). Returns false: the pipeline has not
+// started yet in any case.
+inline bool
+runtime_request_model_load_for_hotkey(GlobalState *AppState, bool ForRecording)
+{
+	int ModelIndex = AppState->CurrentSTTModelIndex;
+	if (ModelIndex < 0 || ModelIndex >= (int)AppState->STTModelPaths.size()) return false;
+
+	if (AppState->PipelineActive.load()) return false;
+
+	if (AppState->CaptureThread.joinable()) AppState->CaptureThread.join();
+
+	AppState->PendingRecordOnModelLoad = ForRecording;
+	AppState->PendingStreamOnModelLoad = !ForRecording;
+
+	if (!runtime_start_model_transition(AppState, ModelIndex,
+		AppState->CurrentInferenceDeviceIndex,
+		true, MODEL_TRANSITION_FAILURE_LOAD))
+	{
+		AppState->PendingRecordOnModelLoad = false;
+		AppState->PendingStreamOnModelLoad = false;
+	}
+
+	return false;
+}
+
+inline bool
 runtime_start_recording(GlobalState *AppState)
 {
-	if (AppState->IsModelTransitioning.load()) return false;
-
-	if (!is_whisper_model_loaded(&AppState->WhisperState)) return false;
+	if (AppState->IsModelTransitioning.load())
+	{
+		AppState->PendingRecordOnModelLoad = true;
+		AppState->PendingStreamOnModelLoad = false;
+		return false;
+	}
 
 	if (AppState->IsStreaming) return false;
+
+	if (!runtime_model_matches_selection(AppState))
+	{
+		return runtime_request_model_load_for_hotkey(AppState, true);
+	}
 
 	if (AppState->IsRecording) return true;
 
@@ -211,6 +272,8 @@ runtime_toggle_recording(GlobalState *AppState)
 inline void
 runtime_cancel_recording(GlobalState *AppState)
 {
+	AppState->PendingRecordOnModelLoad = false;
+
 	if (!AppState->IsRecording) return;
 
 	AppState->CancelRequested.store(true);
@@ -223,27 +286,66 @@ runtime_cancel_recording(GlobalState *AppState)
 inline void
 runtime_toggle_streaming(GlobalState *AppState)
 {
-	if (AppState->IsModelTransitioning.load()) return;
-
-	if (!is_whisper_model_loaded(&AppState->WhisperState)) return;
+	if (AppState->IsModelTransitioning.load())
+	{
+		AppState->PendingStreamOnModelLoad = true;
+		AppState->PendingRecordOnModelLoad = false;
+		return;
+	}
 
 	if (AppState->IsRecording) return;
 
-	AppState->IsStreaming = !AppState->IsStreaming;
-
 	if (AppState->IsStreaming)
 	{
-		bool Started = start_streaming_pipeline(AppState);
-		if (!Started)
+		AppState->IsStreaming = false;
+		stop_streaming_pipeline(AppState);
+		return;
+	}
+
+	if (!runtime_model_matches_selection(AppState))
+	{
+		runtime_request_model_load_for_hotkey(AppState, false);
+		return;
+	}
+
+	AppState->IsStreaming = true;
+
+	bool Started = start_streaming_pipeline(AppState);
+	if (!Started)
+	{
+		AppState->IsStreaming = false;
+		return;
+	}
+}
+
+inline void
+runtime_start_pending_pipelines(GlobalState *AppState)
+{
+	bool WantsRecord = AppState->PendingRecordOnModelLoad;
+	bool WantsStream = AppState->PendingStreamOnModelLoad;
+	AppState->PendingRecordOnModelLoad = false;
+	AppState->PendingStreamOnModelLoad = false;
+
+	if (!WantsRecord && !WantsStream) return;
+
+	if (!is_whisper_model_loaded(&AppState->WhisperState)) return;
+
+	if (WantsRecord)
+	{
+		// Hold mode: if the user already released the key while the model was
+		// loading there is nothing to record — drop the request instead of
+		// starting a recording nothing will stop.
+		if (AppState->RecordHotkeyMode != RECORDING_HOTKEY_TOGGLE &&
+			!is_hotkey_down(AppState->RecordHotkey))
 		{
-			AppState->IsStreaming = false;
 			return;
 		}
+
+		runtime_start_recording(AppState);
+		return;
 	}
-	else
-	{
-		stop_streaming_pipeline(AppState);
-	}
+
+	runtime_toggle_streaming(AppState);
 }
 
 inline ModelTransitionFailure
@@ -252,7 +354,8 @@ runtime_toggle_stt_model_load(GlobalState *AppState)
 	if (AppState->IsModelTransitioning.load()) return MODEL_TRANSITION_FAILURE_NONE;
 
 	if (AppState->IsRecording || AppState->IsStreaming ||
-		AppState->CaptureRunning.load() || AppState->PipelineActive.load())
+		AppState->CaptureRunning.load() || AppState->PipelineActive.load() ||
+		AppState->PendingRecordOnModelLoad || AppState->PendingStreamOnModelLoad)
 	{
 		return MODEL_TRANSITION_FAILURE_NONE;
 	}

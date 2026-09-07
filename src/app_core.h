@@ -27,6 +27,8 @@ app_initialize_runtime(GlobalState *AppState, PlatformWindowHandle OwnWindow)
 {
 	AppState->IsRecording = false;
 	AppState->IsStreaming = false;
+	AppState->PendingRecordOnModelLoad = false;
+	AppState->PendingStreamOnModelLoad = false;
 	AppState->CaptureRunning = false;
 	AppState->PipelineActive = false;
 	AppState->StreamingFinalizeOnStop = false;
