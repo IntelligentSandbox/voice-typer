@@ -879,9 +879,12 @@ render_settings_panel(GlobalState *AppState)
 	ImGui::SetWindowFontScale(1.3f);
 	ImGui::Text("Keyboard Shortcuts");
 	ImGui::SameLine();
+	HelpMarkStyle ShortcutsMarkStyle = help_mark_default_style();
+	ShortcutsMarkStyle.DiameterScale = 0.75f;
 	hover_help_mark(
 		"Select an action above, then click the box and press your desired combination. "
-		"Modifier-only combos (e.g. Ctrl+Alt) are supported. Escape clears the selected shortcut.");
+		"Modifier-only combos (e.g. Ctrl+Alt) are supported. Escape clears the selected shortcut.",
+		ShortcutsMarkStyle);
 	ImGui::SetWindowFontScale(1.0f);
 
 	float AvailWidth = ImGui::GetContentRegionAvail().x;
