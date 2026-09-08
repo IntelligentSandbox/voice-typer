@@ -289,6 +289,7 @@ string_combo(const char *Label, int *CurrentIndex, const std::vector<std::string
 static std::string
 record_button_idle_label(GlobalState *AppState)
 {
+	if (!AppState->RecordHotkey.is_valid()) return "Record";
 	if (AppState->RecordHotkeyMode == RECORDING_HOTKEY_HOLD) return "Record (hold " + hotkey_to_label(AppState->RecordHotkey) + ")";
 
 	return "Record (" + hotkey_to_label(AppState->RecordHotkey) + ")";
@@ -297,18 +298,21 @@ record_button_idle_label(GlobalState *AppState)
 static std::string
 cancel_record_button_idle_label(GlobalState *AppState)
 {
+	if (!AppState->CancelRecordHotkey.is_valid()) return "Cancel";
 	return "Cancel (" + hotkey_to_label(AppState->CancelRecordHotkey) + ")";
 }
 
 static std::string
 stream_button_idle_label(GlobalState *AppState)
 {
+	if (!AppState->StreamHotkey.is_valid()) return "Start Streaming";
 	return "Start Streaming (" + hotkey_to_label(AppState->StreamHotkey) + ")";
 }
 
 static std::string
 load_model_button_idle_label(GlobalState *AppState)
 {
+	if (!AppState->LoadModelHotkey.is_valid()) return "Load Selected STT Model";
 	return "Load Selected STT Model (" + hotkey_to_label(AppState->LoadModelHotkey) + ")";
 }
 
@@ -866,6 +870,11 @@ render_settings_panel(GlobalState *AppState)
 {
 	SettingsWindowState *S = &AppState->Ui.SettingsState;
 
+	if (colored_button("Configure Keyboard Shortcuts", ImVec2(-1.0f, 30.0f), BUTTON_COLOR_GREY))
+	{
+		S->HotkeysModalOpen = true;
+	}
+
 	if (ImGui::Checkbox("Play sound when starting/stopping/cancelling recording",
 		&AppState->PlayRecordSound))
 	{
@@ -997,13 +1006,6 @@ render_settings_panel(GlobalState *AppState)
 
 	float AvailWidth = ImGui::GetContentRegionAvail().x;
 	float Spacing = ImGui::GetStyle().ItemSpacing.x;
-
-	ImGui::Separator();
-
-	if (colored_button("Config Hotkeys", ImVec2(-1.0f, 30.0f), BUTTON_COLOR_GREY))
-	{
-		S->HotkeysModalOpen = true;
-	}
 
 	ImGui::Separator();
 
@@ -1152,9 +1154,9 @@ render_hotkeys_modal(GlobalState *AppState)
 		return;
 	}
 
-	if (!ImGui::IsPopupOpen("Config Hotkeys"))
+	if (!ImGui::IsPopupOpen("Configure Keyboard Shortcuts"))
 	{
-		ImGui::OpenPopup("Config Hotkeys");
+		ImGui::OpenPopup("Configure Keyboard Shortcuts");
 	}
 
 	ImVec2 Display = ImGui::GetIO().DisplaySize;
@@ -1163,12 +1165,12 @@ render_hotkeys_modal(GlobalState *AppState)
 	ImGui::SetNextWindowBgAlpha(1.0f);
 
 	bool Open = true;
-	if (ImGui::BeginPopupModal("Config Hotkeys", &Open,
+	if (ImGui::BeginPopupModal("Configure Keyboard Shortcuts", &Open,
 		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 	{
 		modal_close_on_click_outside(&S->HotkeysModalOpen);
 
-		ImGui::Text("Keyboard Shortcuts");
+		ImGui::Text("Actions");
 		ImGui::SameLine();
 		HelpMarkStyle ShortcutsMarkStyle = help_mark_default_style();
 		ShortcutsMarkStyle.DiameterScale = 0.75f;
@@ -1193,7 +1195,8 @@ render_hotkeys_modal(GlobalState *AppState)
 		HotkeyConfig *CurrentHotkey = settings_action_hotkey_ptr(AppState, S->SelectedAction);
 		if (CurrentHotkey)
 		{
-			ImGui::Text("Current: %s", hotkey_to_label(*CurrentHotkey).c_str());
+			std::string CurrentLabel = CurrentHotkey->is_valid() ? hotkey_to_label(*CurrentHotkey) : "(none)";
+			ImGui::Text("Current: %s", CurrentLabel.c_str());
 		}
 
 		if (S->Capture.IsCapturing)
@@ -1259,7 +1262,7 @@ render_hotkeys_modal(GlobalState *AppState)
 		ImGui::Separator();
 		ImGui::Spacing();
 
-		ImGui::TextUnformatted("Configured Hotkeys");
+		ImGui::TextUnformatted("Per Program Paste Key Combo");
 		ImGui::SameLine();
 
         HelpMarkStyle HotkeyMarkStyle = help_mark_default_style();
@@ -1270,9 +1273,10 @@ render_hotkeys_modal(GlobalState *AppState)
 			"Click a shortcut to change it, X to remove it.",
             HotkeyMarkStyle);
 		ImGui::SameLine();
-		ImGui::TextDisabled("(default: %s)", hotkey_to_label(AppState->PasteHotkey).c_str());
+		std::string DefaultPasteLabel = AppState->PasteHotkey.is_valid()
+			? hotkey_to_label(AppState->PasteHotkey) : "(none)";
+		ImGui::TextDisabled("(default: %s)", DefaultPasteLabel.c_str());
 		ImGui::Spacing();
-		ImGui::Separator();
 
 		std::vector<PasteHotkeyOverride> Overrides;
 		{
@@ -1318,8 +1322,6 @@ render_hotkeys_modal(GlobalState *AppState)
 			}
 			remove_paste_hotkey_override(AppState, ForgetOverrideName);
 		}
-
-		ImGui::Separator();
 
 		if (S->PasteOverrideCapture.IsCapturing)
 		{
@@ -1412,7 +1414,14 @@ render_left_panel(GlobalState *AppState)
 		if (AppState->IsRecording)
 		{
 			Color = BUTTON_COLOR_RED;
-			Label = "Stop (" + hotkey_to_label(AppState->RecordHotkey) + ")";
+			if (AppState->RecordHotkey.is_valid())
+			{
+				Label = "Stop (" + hotkey_to_label(AppState->RecordHotkey) + ")";
+			}
+			else
+			{
+				Label = "Stop";
+			}
 		}
 
 		if (AppState->PipelineActive.load() && !AppState->IsRecording)
@@ -1449,7 +1458,14 @@ render_left_panel(GlobalState *AppState)
 		if (AppState->IsStreaming)
 		{
 			Color = BUTTON_COLOR_RED;
-			Label = "Stop Streaming (" + hotkey_to_label(AppState->StreamHotkey) + ")";
+			if (AppState->StreamHotkey.is_valid())
+			{
+				Label = "Stop Streaming (" + hotkey_to_label(AppState->StreamHotkey) + ")";
+			}
+			else
+			{
+				Label = "Stop Streaming";
+			}
 		}
 		else if (IsModelTransitioning)
 		{
@@ -1525,7 +1541,14 @@ render_left_panel(GlobalState *AppState)
 		if (ModelLoaded)
 		{
 			Color = BUTTON_COLOR_BLUE;
-			Label = "Unload STT Model (" + hotkey_to_label(AppState->LoadModelHotkey) + ")";
+			if (AppState->LoadModelHotkey.is_valid())
+			{
+				Label = "Unload STT Model (" + hotkey_to_label(AppState->LoadModelHotkey) + ")";
+			}
+			else
+			{
+				Label = "Unload STT Model";
+			}
 		}
 		if (IsModelTransitioning)
 		{
