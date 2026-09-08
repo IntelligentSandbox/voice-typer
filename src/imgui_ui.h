@@ -1262,7 +1262,6 @@ render_hotkeys_modal(GlobalState *AppState)
         HotkeyMarkStyle.DiameterScale = 0.75f;
 		hover_help_mark(
 			"Override the paste text keyboard shortcut for individual programs, matched by executable name. "
-			"Handy when one app needs a different paste shortcut. "
 			"Click a shortcut to change it, X to remove it.",
             HotkeyMarkStyle);
 		ImGui::SameLine();
