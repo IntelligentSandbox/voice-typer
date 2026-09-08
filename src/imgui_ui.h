@@ -317,7 +317,7 @@ load_model_button_idle_label(GlobalState *AppState)
 }
 
 // ---------------------------------------------------------------------------
-// Settings panel helpers (inline in right column)
+// Settings panel helpers (inline in left column)
 // ---------------------------------------------------------------------------
 static HotkeyConfig *
 settings_action_hotkey_ptr(GlobalState *AppState, int Action)
@@ -863,7 +863,7 @@ render_font_name_input(GlobalState *AppState)
 }
 
 // ---------------------------------------------------------------------------
-// Settings panel - rendered inline in the right column
+// Settings panel - rendered inline in the left column, below the left panel
 // ---------------------------------------------------------------------------
 static void
 render_settings_panel(GlobalState *AppState)
@@ -2066,27 +2066,21 @@ render_main_ui(GlobalState *AppState, ImGuiIO &Io)
 
 	const float Padding = 16.0f;
 	const float ColumnWidth = (Io.DisplaySize.x - Padding * 3.0f) * 0.5f;
+	const float ColumnHeight = Io.DisplaySize.y - Padding * 2.0f;
 
 	ImGui::SetCursorPos(ImVec2(Padding, Padding));
-	ImGui::BeginChild("##LeftColumn", ImVec2(ColumnWidth, 0.0f),
-		ImGuiChildFlags_AutoResizeY,
-		ImGuiWindowFlags_NoScrollbar);
+	ImGui::BeginChild("##LeftColumn", ImVec2(ColumnWidth, ColumnHeight));
 	render_left_panel(AppState);
+	ImGui::Separator();
+	render_settings_panel(AppState);
 	ImGui::EndChild();
-	const float LeftEndY = ImGui::GetCursorPosY();
 
 	ImGui::SetCursorPos(ImVec2(Padding * 2.0f + ColumnWidth, Padding));
 	ImGui::BeginChild("##RightColumn", ImVec2(ColumnWidth, 0.0f),
 		ImGuiChildFlags_AutoResizeY,
 		ImGuiWindowFlags_NoScrollbar);
-	render_settings_panel(AppState);
-	ImGui::EndChild();
-	const float RightEndY = ImGui::GetCursorPosY();
-
-	float TallerEndY = (LeftEndY > RightEndY) ? LeftEndY : RightEndY;
-	ImGui::SetCursorPos(ImVec2(Padding, TallerEndY + Padding));
-	ImGui::SetNextItemWidth(-1.0f);
 	render_transcribed_text_box(AppState);
+	ImGui::EndChild();
 
 	render_download_modal(AppState);
 	render_update_modal(AppState);
