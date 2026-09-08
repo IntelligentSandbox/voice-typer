@@ -1,5 +1,6 @@
 #pragma once
 
+#include "build_time_constants.h"
 #include "host_services.h"
 
 #include <cstdio>
@@ -14,10 +15,6 @@
 	#include <dbghelp.h>
 	#pragma comment(lib, "dbghelp.lib")
 #endif
-
-#define VOICETYPER_CRASH_DUMP_PREFIX    "voicetyper-crash-"
-#define VOICETYPER_CRASH_DUMP_SUFFIX    ".dmp"
-#define VOICETYPER_CRASH_SEEN_SUFFIX    ".seen"
 
 struct DiagnosticsState
 {
@@ -44,9 +41,9 @@ diag_crash_dump_path_for_now()
 	char TimeBuf[32];
 	strftime(TimeBuf, sizeof(TimeBuf), "%Y%m%d-%H%M%S", &LocalTm);
 
-	std::string Filename = VOICETYPER_CRASH_DUMP_PREFIX;
+	std::string Filename = CRASH_DUMP_PREFIX;
 	Filename += TimeBuf;
-	Filename += VOICETYPER_CRASH_DUMP_SUFFIX;
+	Filename += CRASH_DUMP_SUFFIX;
 
 	return platform_join_path(platform_get_exe_dir(), Filename);
 }
@@ -121,7 +118,7 @@ platform_open_folder_selecting_file(const std::string &)
 inline bool
 diag_has_seen_sidecar(const std::string &DumpPath)
 {
-	std::string SeenPath = DumpPath + VOICETYPER_CRASH_SEEN_SUFFIX;
+	std::string SeenPath = DumpPath + CRASH_SEEN_SUFFIX;
 	FILE *F = fopen(SeenPath.c_str(), "r");
 	if (!F) return false;
 	fclose(F);
@@ -136,13 +133,13 @@ check_for_previous_crash_dumps(std::vector<std::string> *OutPaths)
 	std::string Dir = platform_get_exe_dir();
 	std::vector<PlatformFileInfo> Files = platform_list_files(Dir);
 
-	size_t SuffixLen = strlen(VOICETYPER_CRASH_DUMP_SUFFIX);
+	size_t SuffixLen = strlen(CRASH_DUMP_SUFFIX);
 
 	for (const PlatformFileInfo &File : Files)
 	{
-		if (File.Name.rfind(VOICETYPER_CRASH_DUMP_PREFIX, 0) != 0) continue;
+		if (File.Name.rfind(CRASH_DUMP_PREFIX, 0) != 0) continue;
 
-		size_t SuffixPos = File.Name.rfind(VOICETYPER_CRASH_DUMP_SUFFIX);
+		size_t SuffixPos = File.Name.rfind(CRASH_DUMP_SUFFIX);
 		if (SuffixPos == std::string::npos) continue;
 		if (SuffixPos + SuffixLen != File.Name.size()) continue;
 
@@ -156,7 +153,7 @@ check_for_previous_crash_dumps(std::vector<std::string> *OutPaths)
 inline void
 mark_crash_dump_seen(const std::string &DumpPath)
 {
-	std::string SeenPath = DumpPath + VOICETYPER_CRASH_SEEN_SUFFIX;
+	std::string SeenPath = DumpPath + CRASH_SEEN_SUFFIX;
 	FILE *F = fopen(SeenPath.c_str(), "w");
 	if (!F) return;
 	fclose(F);

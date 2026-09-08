@@ -1,12 +1,9 @@
 #pragma once
 
+#include "build_time_constants.h"
 #include "runtime_control.h"
 
 #include "imgui.h"
-
-#define TOAST_DURATION_SECONDS 2.0
-#define TOAST_COLOR_ERROR    ColorRgba{0.70f, 0.10f, 0.10f, 1.0f}
-#define TOAST_COLOR_SUCCESS  ColorRgba{0.10f, 0.55f, 0.20f, 1.0f}
 
 inline void
 show_toast_with_color(GlobalState *AppState, const char *Message, const ColorRgba &BackgroundColor)

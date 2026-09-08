@@ -15,13 +15,6 @@
 #include <cstdio>
 #include <cstring>
 
-#define BUTTON_COLOR_GREEN   ImVec4(0.0f, 0.50f, 0.0f, 1.0f)
-#define BUTTON_COLOR_RED     ImVec4(0.75f, 0.07f, 0.13f, 1.0f)
-#define BUTTON_COLOR_GREY    ImVec4(0.50f, 0.50f, 0.50f, 1.0f)
-#define BUTTON_COLOR_BLUE    ImVec4(0.13f, 0.59f, 0.95f, 1.0f)
-
-#define FONT_SUGGESTION_MAX_ROWS 5
-
 // ---------------------------------------------------------------------------
 // Styled button helper
 // ---------------------------------------------------------------------------
@@ -492,7 +485,7 @@ render_update_modal(GlobalState *AppState)
 		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 	{
 		modal_close_on_click_outside(&U->IsModalOpen);
-		ImGui::TextDisabled("v%s", VOICETYPER_VERSION_FULL);
+		ImGui::TextDisabled("v%s", VERSION_FULL);
 		ImGui::Spacing();
 
 		if (U->DownloadRunning.load())
@@ -2065,17 +2058,35 @@ render_main_ui(GlobalState *AppState, ImGuiIO &Io)
 		ImGuiWindowFlags_NoBringToFrontOnFocus);
 
 	const float Padding = 16.0f;
-	const float ColumnWidth = (Io.DisplaySize.x - Padding * 3.0f) * 0.5f;
-	const float ColumnHeight = Io.DisplaySize.y - Padding * 2.0f;
+	const bool TwoColumns = Io.DisplaySize.x >= (float)TWO_COLUMN_MIN_WIDTH;
+	const float ColumnWidth = TwoColumns
+		? (Io.DisplaySize.x - Padding * 3.0f) * 0.5f
+		: (Io.DisplaySize.x - Padding * 2.0f);
 
 	ImGui::SetCursorPos(ImVec2(Padding, Padding));
-	ImGui::BeginChild("##LeftColumn", ImVec2(ColumnWidth, ColumnHeight));
+	if (TwoColumns)
+	{
+		ImGui::BeginChild("##LeftColumn", ImVec2(ColumnWidth, Io.DisplaySize.y - Padding * 2.0f));
+	}
+	else
+	{
+		ImGui::BeginChild("##LeftColumn", ImVec2(ColumnWidth, 0.0f),
+			ImGuiChildFlags_AutoResizeY,
+			ImGuiWindowFlags_NoScrollbar);
+	}
 	render_left_panel(AppState);
 	ImGui::Separator();
 	render_settings_panel(AppState);
 	ImGui::EndChild();
 
-	ImGui::SetCursorPos(ImVec2(Padding * 2.0f + ColumnWidth, Padding));
+	if (TwoColumns)
+	{
+		ImGui::SetCursorPos(ImVec2(Padding * 2.0f + ColumnWidth, Padding));
+	}
+	else
+	{
+		ImGui::SetCursorPos(ImVec2(Padding, ImGui::GetCursorPosY() + Padding));
+	}
 	ImGui::BeginChild("##RightColumn", ImVec2(ColumnWidth, 0.0f),
 		ImGuiChildFlags_AutoResizeY,
 		ImGuiWindowFlags_NoScrollbar);

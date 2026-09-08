@@ -1,30 +1,9 @@
 #pragma once
 
+#include "build_time_constants.h"
+
 #include <cmath>
 #include <vector>
-
-// Minimum RMS energy to bother sending a chunk to whisper.
-#define PIPELINE_SILENCE_RMS_THRESHOLD 0.0005f
-
-// How often (ms) the stream segmenter thread polls the audio buffer for energy levels.
-#define STREAM_POLL_INTERVAL_MS 100
-
-// Cold-start RMS energy threshold for classifying a poll interval as speech vs
-// silence. Once capture starts the threshold adapts to the measured noise floor.
-#define STREAM_SPEECH_RMS_THRESHOLD 0.002f
-
-// The speech threshold tracks the measured noise floor: threshold = floor * RATIO,
-// clamped to [MIN, MAX] so digital silence cannot drive it to zero and loud rooms
-// cannot push it past reasonable speech levels.
-#define STREAM_SPEECH_RMS_RATIO 2.5f
-#define STREAM_SPEECH_RMS_MIN 0.0015f
-#define STREAM_SPEECH_RMS_MAX 0.02f
-
-// Noise floor tracking rates, applied per poll while no speech is in progress:
-// rises quickly to follow noise ramps, decays slowly so brief quiet gaps do not
-// collapse it under the next utterance.
-#define STREAM_NOISE_FLOOR_RISE 0.3f
-#define STREAM_NOISE_FLOOR_DECAY 0.05f
 
 // Shared speech/silence classifier for the streaming segmenter. The live segmenter
 // thread (audio_pipeline.h) and the offline replica below feed poll-window RMS
@@ -69,12 +48,6 @@ stream_speech_detector_poll(StreamSpeechDetector *Detector, float CurrentRms, in
 
 	return false;
 }
-
-// Minimum chunk duration (ms) before a speech->silence transition can trigger a cutoff.
-#define STREAM_MIN_CHUNK_DURATION_MS 1000
-
-// How long silence (ms) must persist after speech before cutting the chunk.
-#define STREAM_SILENCE_DURATION_MS 500
 
 // Offline replica of stream_segment_thread's chunking logic. Operates on a complete
 // PCM buffer and returns the silence-bounded chunks the live segmenter would have

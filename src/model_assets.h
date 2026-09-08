@@ -9,12 +9,11 @@
 #include <string>
 #include <vector>
 
-#define VAD_MODEL_RELATIVE "vad_models/" VAD_MODEL_FILENAME
-
 inline void
 query_vad_model_path(GlobalState *AppState)
 {
-	AppState->VadModelPath = platform_join_path(platform_get_exe_dir(), VAD_MODEL_RELATIVE);
+	AppState->VadModelPath = platform_join_path(
+		platform_join_path(platform_get_exe_dir(), "vad_models"), VAD_MODEL_FILENAME);
 }
 
 inline bool

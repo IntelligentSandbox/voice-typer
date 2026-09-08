@@ -12,25 +12,13 @@
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
 
+#include "build_time_constants.h"
 #include "state.h"
 #include "platform_win32.h"
 #include "settings.h"
 #include "app_core.h"
 #include "imgui_ui.h"
 #include "diagnostics.h"
-
-#ifndef VOICETYPER_APP_UPDATE_HZ
-#define VOICETYPER_APP_UPDATE_HZ 100
-#endif
-
-#ifndef VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS
-#define VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS 5
-#endif
-
-static_assert(VOICETYPER_APP_UPDATE_HZ > 0, "VOICETYPER_APP_UPDATE_HZ must be positive");
-static_assert(
-	VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS > 0,
-	"VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS must be positive");
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -50,9 +38,6 @@ static bool                    g_RenderDueNow      = true;
 static int                     g_RenderRefreshHz   = 60;
 static LONGLONG                g_RenderIntervalTicks = 0;
 static LONGLONG                g_PerformanceCounterFrequency = 0;
-static const int               WINDOW_MIN_WIDTH    = 320;
-static const int               WINDOW_MIN_HEIGHT   = 240;
-static const int               RENDER_REFRESH_FALLBACK_HZ = 60;
 
 static bool                    g_InSizeMove              = false;
 static LONGLONG                g_AppUpdateIntervalTicks  = 0;
@@ -353,7 +338,7 @@ run_due_app_updates(LONGLONG Now)
 	if (!g_AppState) return Now;
 
 	int AppTicksRun = 0;
-	while (Now >= g_NextAppTick && AppTicksRun < VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS)
+	while (Now >= g_NextAppTick && AppTicksRun < APP_UPDATE_MAX_CATCH_UP_TICKS)
 	{
 		AppFrameResult FrameResult = app_update_runtime_frame(
 			g_AppState,
@@ -520,7 +505,7 @@ WinMain(HINSTANCE Instance, HINSTANCE /*PrevInstance*/, LPSTR /*CmdLine*/, int /
 	g_ImGuiReady = true;
 
 	refresh_render_cadence(Hwnd);
-	g_AppUpdateIntervalTicks = performance_interval_for_hz(VOICETYPER_APP_UPDATE_HZ);
+	g_AppUpdateIntervalTicks = performance_interval_for_hz(APP_UPDATE_HZ);
 	LONGLONG Now = performance_counter_now();
 	g_NextAppTick = Now;
 	LONGLONG NextRenderTick = Now;

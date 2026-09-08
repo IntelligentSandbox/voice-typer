@@ -1,5 +1,6 @@
 #pragma once
 
+#include "build_time_constants.h"
 #include "host_services.h"
 #include "state.h"
 
@@ -21,14 +22,6 @@
 	#include <sys/wait.h>
 	#include <unistd.h>
 #endif
-
-#ifndef VOICETYPER_VERSION_FULL
-	#define VOICETYPER_VERSION_FULL "0.0.0-unknown"
-#endif
-
-#define UPDATER_GITHUB_REPO       "IntelligentSandbox/VoiceTyper"
-#define UPDATER_API_RELEASES_URL "https://api.github.com/repos/" UPDATER_GITHUB_REPO "/releases?per_page=100"
-#define UPDATER_RELEASES_URL     "https://github.com/" UPDATER_GITHUB_REPO "/releases/latest"
 
 struct UpdaterVersion
 {
@@ -86,7 +79,7 @@ updater_version_is_newer(const UpdaterVersion &Candidate, const UpdaterVersion &
 static std::string
 updater_current_version_base()
 {
-	std::string Version = VOICETYPER_VERSION_FULL;
+	std::string Version = VERSION_FULL;
 	size_t Dash = Version.find('-');
 	if (Dash != std::string::npos) Version.resize(Dash);
 	return Version;

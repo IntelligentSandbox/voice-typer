@@ -5,29 +5,14 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
 
+#include "build_time_constants.h"
 #include "state.h"
 #include "platform_linux.h"
 #include "settings.h"
 #include "app_core.h"
 #include "imgui_ui.h"
 
-#ifndef VOICETYPER_APP_UPDATE_HZ
-#define VOICETYPER_APP_UPDATE_HZ 100
-#endif
-
-#ifndef VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS
-#define VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS 5
-#endif
-
-static_assert(VOICETYPER_APP_UPDATE_HZ > 0, "VOICETYPER_APP_UPDATE_HZ must be positive");
-static_assert(
-	VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS > 0,
-	"VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS must be positive");
-
 static GlobalState *g_AppState = nullptr;
-static const int WINDOW_MIN_WIDTH = 320;
-static const int WINDOW_MIN_HEIGHT = 240;
-static const int RENDER_SLEEP_MAX_MS = 16;
 
 static bool
 load_window_size(int *OutWidth, int *OutHeight)
@@ -170,7 +155,7 @@ main(int, char **)
 	ImGui_ImplSDL2_InitForSDLRenderer(Window, Renderer);
 	ImGui_ImplSDLRenderer2_Init(Renderer);
 
-	const Uint64 AppUpdateIntervalTicks = performance_interval_for_hz(VOICETYPER_APP_UPDATE_HZ);
+	const Uint64 AppUpdateIntervalTicks = performance_interval_for_hz(APP_UPDATE_HZ);
 	Uint64 Now = performance_counter_now();
 	Uint64 NextAppTick = Now;
 
@@ -199,7 +184,7 @@ main(int, char **)
 		Now = performance_counter_now();
 
 		int AppTicksRun = 0;
-		while (Now >= NextAppTick && AppTicksRun < VOICETYPER_APP_UPDATE_MAX_CATCH_UP_TICKS)
+		while (Now >= NextAppTick && AppTicksRun < APP_UPDATE_MAX_CATCH_UP_TICKS)
 		{
 			AppFrameResult FrameResult = app_update_runtime_frame(
 				AppState,

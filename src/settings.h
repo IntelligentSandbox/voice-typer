@@ -1,5 +1,6 @@
 #pragma once
 
+#include "build_time_constants.h"
 #include "settings_store.h"
 
 #include <string>
@@ -26,10 +27,6 @@ load_hotkey_setting(const char *Name, int *OutModifiers, int *OutKey)
 	*OutKey = std::stoi(KeyIt->second);
 	return true;
 }
-
-// Per-program paste hotkey overrides live as paste_hotkey_app_<process>_modifiers/_key
-// entries in settings.ini.
-#define PASTE_HOTKEY_OVERRIDE_SETTING_PREFIX "paste_hotkey_app_"
 
 inline void
 save_paste_hotkey_override_setting(const std::string &ProcessName, HotkeyConfig Hotkey)

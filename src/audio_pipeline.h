@@ -271,7 +271,7 @@ stream_infer_thread(GlobalState *AppState, StreamingChunkQueue *Queue)
 
 	whisper_full_params Params = make_transcription_whisper_params(
 		AppState->WhisperThreadCount,
-		VOICETYPER_STREAMING_WHISPER_VAD != 0,
+		STREAMING_WHISPER_VAD,
 		AppState->VadModelPath.c_str(),
 		InitialPrompt.empty() ? nullptr : InitialPrompt.c_str());
 	Params.single_segment      = true;
@@ -335,11 +335,11 @@ record_pipeline_thread(GlobalState *AppState, int DeviceIndex)
 			InitialPrompt = AppState->WhisperInitialPrompt;
 		}
 
-		whisper_full_params Params = make_transcription_whisper_params(
-			AppState->WhisperThreadCount,
-			VOICETYPER_RECORD_WHISPER_VAD != 0,
-			AppState->VadModelPath.c_str(),
-			InitialPrompt.empty() ? nullptr : InitialPrompt.c_str());
+	whisper_full_params Params = make_transcription_whisper_params(
+		AppState->WhisperThreadCount,
+		RECORD_WHISPER_VAD,
+		AppState->VadModelPath.c_str(),
+		InitialPrompt.empty() ? nullptr : InitialPrompt.c_str());
 		Params.single_segment      = false;
 
 		run_whisper_on_chunk(AppState, Params, Chunk);

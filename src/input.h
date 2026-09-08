@@ -129,6 +129,7 @@ check_modifier_state(AppHotkeyModifiers Modifiers)
 inline bool
 is_hotkey_down(const HotkeyConfig &Config)
 {
+	if (!Config.is_valid()) return false;
 	if (!check_modifier_state(Config.Modifiers)) return false;
 	if (Config.VirtualKey == APP_KEY_NONE) return true;
 	return app_key_is_down(Config.VirtualKey);
