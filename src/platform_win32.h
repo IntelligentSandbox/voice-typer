@@ -305,8 +305,11 @@ platform_window_has_focused_text_input(PlatformRuntimeState *Platform, void *Win
 		{
 			if (wcscmp(ClassName, L"Edit") == 0) return true;
 			if (wcsncmp(ClassName, L"RICHEDIT", 8) == 0) return true;
+			if (wcscmp(ClassName, L"Scintilla") == 0) return true;
 			if (wcscmp(ClassName, L"ConsoleWindowClass") == 0) return true;
 		}
+
+		if (Info.hwndCaret) return true;
 	}
 
 	bool Result = false;
