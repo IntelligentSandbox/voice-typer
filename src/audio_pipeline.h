@@ -111,8 +111,6 @@ run_whisper_on_chunk(GlobalState *AppState, whisper_full_params &Params, std::ve
 	{
 		void *TargetWindow = platform_get_foreground_window(&AppState->Platform);
 		if (TargetWindow == AppState->Platform.OwnWindow) TargetWindow = nullptr;
-		if (TargetWindow && !platform_window_has_focused_text_input(&AppState->Platform, TargetWindow))
-			TargetWindow = nullptr;
 		if (!TargetWindow)
 		{
 			printf("[transcription] %s\n", Transcription.c_str());

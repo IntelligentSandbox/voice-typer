@@ -12,7 +12,6 @@ std::vector<AudioInputDeviceInfo> platform_query_audio_devices();
 void platform_inject_text(PlatformRuntimeState *Platform, void *Window, const char *Utf8, bool CharByChar, HotkeyConfig PasteHotkey);
 void platform_set_clipboard_text(PlatformRuntimeState *Platform, const char *Utf8);
 void *platform_get_foreground_window(PlatformRuntimeState *Platform);
-bool platform_window_has_focused_text_input(PlatformRuntimeState *Platform, void *Window);
 std::string platform_get_window_process_name(void *Window);
 void platform_set_taskbar_icon(void *Window, const char *PngPath);
 void platform_apply_window_theme(void *Window, bool LightMode);

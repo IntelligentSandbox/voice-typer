@@ -953,7 +953,7 @@ render_settings_panel(GlobalState *AppState)
 		save_bool_setting("use_char_by_char_injection", AppState->UseCharByCharInjection);
 	}
 
-	if (ImGui::Checkbox("If no text input is focused when recording finishes, copy transcription to clipboard",
+	if (ImGui::Checkbox("If no other window is focused when recording finishes, copy transcription to clipboard",
 		&AppState->CopyToClipboardWhenNoTarget))
 	{
 		save_bool_setting("copy_to_clipboard_when_no_target", AppState->CopyToClipboardWhenNoTarget);

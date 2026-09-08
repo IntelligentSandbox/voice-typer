@@ -16,15 +16,12 @@
 #include <mmdeviceapi.h>
 #include <propkey.h>
 #include <functiondiscoverykeys.h>
-#include <uiautomation.h>
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "propsys.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "advapi32.lib")
-#pragma comment(lib, "uiautomationcore.lib")
-#pragma comment(lib, "oleaut32.lib")
 
 // ---------------------------------------------------------------------------
 // Platform interface implementations (declared in platform.h)
@@ -283,71 +280,6 @@ platform_get_foreground_window(PlatformRuntimeState *Platform)
 {
 	(void)Platform;
 	return (void*)GetForegroundWindow();
-}
-
-inline bool
-platform_window_has_focused_text_input(PlatformRuntimeState *Platform, void *Window)
-{
-	(void)Platform;
-	HWND HWnd = (HWND)Window;
-	if (!HWnd || GetForegroundWindow() != HWnd) return false;
-
-	DWORD ThreadId = GetWindowThreadProcessId(HWnd, nullptr);
-	if (ThreadId == 0) return false;
-
-	GUITHREADINFO Info = {};
-	Info.cbSize = sizeof(Info);
-	if (GetGUIThreadInfo(ThreadId, &Info) && Info.hwndFocus)
-	{
-		wchar_t ClassName[64] = {};
-		int NameLen = GetClassNameW(Info.hwndFocus, ClassName, 64);
-		if (NameLen > 0)
-		{
-			if (wcscmp(ClassName, L"Edit") == 0) return true;
-			if (wcsncmp(ClassName, L"RICHEDIT", 8) == 0) return true;
-			if (wcscmp(ClassName, L"Scintilla") == 0) return true;
-			if (wcscmp(ClassName, L"ConsoleWindowClass") == 0) return true;
-		}
-
-		if (Info.hwndCaret) return true;
-	}
-
-	bool Result = false;
-	HRESULT CoHr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
-	if (CoHr == RPC_E_CHANGED_MODE) CoHr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-	bool ComOwned = (CoHr == S_OK);
-
-	IUIAutomation *Automation = nullptr;
-	if (CoCreateInstance(__uuidof(CUIAutomation), nullptr, CLSCTX_INPROC_SERVER,
-		__uuidof(IUIAutomation), (void **)&Automation) == S_OK)
-	{
-		IUIAutomationElement *Element = nullptr;
-		if (Automation->GetFocusedElement(&Element) == S_OK)
-		{
-			CONTROLTYPEID ControlType = 0;
-			if (Element->get_CurrentControlType(&ControlType) == S_OK)
-			{
-				Result = (ControlType == UIA_EditControlTypeId || ControlType == UIA_DocumentControlTypeId);
-			}
-
-			if (!Result)
-			{
-				VARIANT TextPatternAvailable;
-				if (Element->GetCurrentPropertyValue(UIA_IsTextPatternAvailablePropertyId,
-					&TextPatternAvailable) == S_OK)
-				{
-					Result = (TextPatternAvailable.vt == VT_BOOL &&
-						TextPatternAvailable.boolVal == VARIANT_TRUE);
-					VariantClear(&TextPatternAvailable);
-				}
-			}
-			Element->Release();
-		}
-		Automation->Release();
-	}
-
-	if (ComOwned) CoUninitialize();
-	return Result;
 }
 
 inline void

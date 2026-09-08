@@ -607,68 +607,6 @@ platform_get_foreground_window(PlatformRuntimeState *Platform)
 #endif
 }
 
-inline bool
-platform_window_has_focused_text_input(PlatformRuntimeState *Platform, void *Window)
-{
-#ifdef VOICETYPER_HAVE_X11
-	(void)Platform;
-	if (!Window)
-	{
-		return false;
-	}
-
-	std::unique_lock<std::mutex> X11Lock;
-	LinuxX11ApiType *Api = linux_x11_acquire(X11Lock);
-	if (!Api)
-	{
-		return true;
-	}
-
-	Display *Dpy = Api->Dpy;
-	::Window XID = (::Window)(uintptr_t)Window;
-
-	LinuxX11ErrorHandlerFn Prev = Api->XSetErrorHandler(&linux_x11_ignore_error);
-
-	XWindowAttributes Attributes = {};
-	if (!Api->XGetWindowAttributes(Dpy, XID, &Attributes) || Attributes.map_state != IsViewable)
-	{
-		Api->XSync(Dpy, False);
-		Api->XSetErrorHandler(Prev);
-		return false;
-	}
-
-	bool IsClient = false;
-	Atom WMState = Api->XInternAtom(Dpy, "WM_STATE", True);
-	if (WMState != None)
-	{
-		Atom PropType = None;
-		int PropFormat = 0;
-		unsigned long NumItems = 0;
-		unsigned long BytesAfter = 0;
-		unsigned char *Data = nullptr;
-		int Ret = Api->XGetWindowProperty(Dpy, XID, WMState, 0, 0, False, AnyPropertyType, &PropType, &PropFormat,
-			&NumItems, &BytesAfter, &Data);
-		if (Ret == Success && PropType != None)
-		{
-			IsClient = true;
-		}
-		if (Data)
-		{
-			Api->XFree(Data);
-		}
-	}
-
-	Api->XSync(Dpy, False);
-	Api->XSetErrorHandler(Prev);
-
-	return IsClient;
-#else
-	(void)Platform;
-	(void)Window;
-	return true;
-#endif
-}
-
 inline std::string
 platform_get_window_process_name(void *Window)
 {
