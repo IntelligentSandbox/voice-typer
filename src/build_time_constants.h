@@ -33,7 +33,7 @@ static_assert(APP_UPDATE_MAX_CATCH_UP_TICKS > 0, "APP_UPDATE_MAX_CATCH_UP_TICKS 
 
 // Minimum main window width in px for the two-column layout; below it the
 // columns stack vertically
-inline constexpr int TWO_COLUMN_MIN_WIDTH = 500;
+inline constexpr int TWO_COLUMN_MIN_WIDTH = 1000;
 static_assert(TWO_COLUMN_MIN_WIDTH > 0, "TWO_COLUMN_MIN_WIDTH must be positive");
 
 // Use Whisper VAD for silence-bounded streaming/record chunks
