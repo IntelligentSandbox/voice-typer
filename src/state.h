@@ -60,7 +60,7 @@ struct SettingsWindowState
 	char NewPasteOverrideProcess[128];
 	HotkeyCaptureState PasteOverrideCapture;
 	std::string PasteOverrideCaptureProcess;
-	bool PasteOverrideModalOpen;
+	bool HotkeysModalOpen;
 };
 
 struct ModelDownloadState

@@ -720,7 +720,7 @@ render_font_name_input(GlobalState *AppState)
 {
 	SettingsWindowState *S = &AppState->Ui.SettingsState;
 
-	ImGui::TextUnformatted("Font");
+	ImGui::TextUnformatted("Font Name");
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(-1.0f);
 
@@ -945,8 +945,7 @@ render_settings_panel(GlobalState *AppState)
 		ImGui::Unindent(20.0f);
 	}
 
-	std::string CharByCharLabel = "Use character-by-character text injection (instead of paste " +
-		hotkey_to_label(AppState->PasteHotkey) + ")";
+	std::string CharByCharLabel = "Use character-by-character text injection instead of paste";
 	if (ImGui::Checkbox(CharByCharLabel.c_str(), &AppState->UseCharByCharInjection))
 	{
 		save_bool_setting("use_char_by_char_injection", AppState->UseCharByCharInjection);
@@ -969,7 +968,7 @@ render_settings_panel(GlobalState *AppState)
 
 	float NumInputWidth = ImGui::GetFontSize() * 5.5f;
 
-	ImGui::TextUnformatted("Font size");
+	ImGui::TextUnformatted("Font Size");
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(NumInputWidth);
 	if (ImGui::InputInt("##UiFontSize", &AppState->UiFontSize, 1, 1))
@@ -977,16 +976,6 @@ render_settings_panel(GlobalState *AppState)
 		if (AppState->UiFontSize < 8) AppState->UiFontSize = 8;
 		if (AppState->UiFontSize > 72) AppState->UiFontSize = 72;
 		save_int_setting("ui_font_size", AppState->UiFontSize);
-	}
-
-    ImGui::Text("CPU Cores for Inference");
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth(NumInputWidth);
-	int MaxCores = query_logical_processor_count();
-	if (ImGui::InputInt("##ThreadCount", &AppState->WhisperThreadCount, 1, 1))
-	{
-		if (AppState->WhisperThreadCount < 1) AppState->WhisperThreadCount = 1;
-		if (AppState->WhisperThreadCount > MaxCores) AppState->WhisperThreadCount = MaxCores;
 	}
 
 	ImGui::TextUnformatted("Initial Whisper Prompt");
@@ -1006,98 +995,14 @@ render_settings_panel(GlobalState *AppState)
 		whisper_prompt_apply(AppState, S->WhisperPromptBuffer);
 	}
 
-	ImGui::Text("Keyboard Shortcuts");
-	ImGui::SameLine();
-	HelpMarkStyle ShortcutsMarkStyle = help_mark_default_style();
-	ShortcutsMarkStyle.DiameterScale = 0.75f;
-	hover_help_mark(
-		"Select an action below, then click the box and press your desired combination. "
-		"Modifier-only combos (e.g. Ctrl+Alt) are supported. Escape clears the selected shortcut.",
-		ShortcutsMarkStyle);
-
 	float AvailWidth = ImGui::GetContentRegionAvail().x;
 	float Spacing = ImGui::GetStyle().ItemSpacing.x;
-	float BtnWidth = (AvailWidth - Spacing * 4) / 5;
-	ImVec2 ActionSize = ImVec2(BtnWidth, 40);
-
-	const char *ActionLabels[] = { "Record", "Cancel Record", "Stream", "Load Model", "Paste Text" };
-	for (int i = 0; i < 5; i++)
-	{
-		if (i > 0) ImGui::SameLine();
-		ImVec4 Color = (S->SelectedAction == i) ? BUTTON_COLOR_BLUE : BUTTON_COLOR_GREY;
-		if (colored_button(ActionLabels[i], ActionSize, Color)) settings_select_action(AppState, i);
-	}
-
-	HotkeyConfig *CurrentHotkey = settings_action_hotkey_ptr(AppState, S->SelectedAction);
-	if (CurrentHotkey)
-	{
-		ImGui::Text("Current: %s", hotkey_to_label(*CurrentHotkey).c_str());
-	}
-
-	if (S->Capture.IsCapturing)
-	{
-		HotkeyConfig Captured = {};
-		HotkeyCaptureResult CaptureResult = poll_hotkey_capture(&S->Capture, &Captured);
-		if (CaptureResult == HOTKEY_CAPTURE_CLEARED)
-		{
-			HotkeyConfig *H = settings_action_hotkey_ptr(AppState, S->SelectedAction);
-			if (H) *H = {};
-			settings_save_action_hotkey(AppState, S->SelectedAction);
-		}
-		else if (CaptureResult == HOTKEY_CAPTURE_COMMITTED)
-		{
-			HotkeyConfig *H = settings_action_hotkey_ptr(AppState, S->SelectedAction);
-			if (H) *H = Captured;
-			settings_save_action_hotkey(AppState, S->SelectedAction);
-		}
-	}
-
-	// Capture display button
-	{
-		std::string CaptureText;
-		ImVec4 BgColor;
-
-		if (S->Capture.IsCapturing)
-		{
-			BgColor = ImVec4(0.08f, 0.40f, 0.75f, 1.0f);
-			if (S->Capture.HasCapture) CaptureText = hotkey_to_label(S->Capture.Captured) + "...";
-			else CaptureText = "Press a key combination...";
-		}
-		else
-		{
-			BgColor = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);
-			if (S->Capture.HasCapture) CaptureText = hotkey_to_label(S->Capture.Captured);
-			else CaptureText = "Click here, then press your hotkey...";
-		}
-
-		ImGui::PushStyleColor(ImGuiCol_Button, BgColor);
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-			ImVec4(BgColor.x * 1.3f > 1.0f ? 1.0f : BgColor.x * 1.3f,
-			       BgColor.y * 1.3f > 1.0f ? 1.0f : BgColor.y * 1.3f,
-			       BgColor.z * 1.3f > 1.0f ? 1.0f : BgColor.z * 1.3f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, BgColor);
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-
-		std::string ButtonLabel = CaptureText + "##CaptureHotkey";
-		if (ImGui::Button(ButtonLabel.c_str(), ImVec2(-1, 40)))
-		{
-			S->Capture.IsCapturing = !S->Capture.IsCapturing;
-			if (S->Capture.IsCapturing)
-			{
-				S->Capture.PeakModifiers = 0;
-				S->Capture.PeakVirtualKey = 0;
-				S->Capture.ReleaseFrames = 0;
-			}
-		}
-
-		ImGui::PopStyleColor(4);
-	}
 
 	ImGui::Separator();
 
-	if (colored_button("Configure Per Program Paste", ImVec2(-1.0f, 30.0f), BUTTON_COLOR_GREY))
+	if (colored_button("Config Hotkeys", ImVec2(-1.0f, 30.0f), BUTTON_COLOR_GREY))
 	{
-		S->PasteOverrideModalOpen = true;
+		S->HotkeysModalOpen = true;
 	}
 
 	ImGui::Separator();
@@ -1226,15 +1131,19 @@ render_crash_dialog_ui(GlobalState *AppState)
 }
 
 // ---------------------------------------------------------------------------
-// Per-Program Paste Hotkeys modal - opened from the settings panel
+// Hotkeys modal - global shortcuts and per-program paste overrides
 // ---------------------------------------------------------------------------
 static void
-render_paste_override_modal(GlobalState *AppState)
+render_hotkeys_modal(GlobalState *AppState)
 {
 	SettingsWindowState *S = &AppState->Ui.SettingsState;
 
-	if (!S->PasteOverrideModalOpen)
+	if (!S->HotkeysModalOpen)
 	{
+		if (S->Capture.IsCapturing)
+		{
+			S->Capture.IsCapturing = false;
+		}
 		if (S->PasteOverrideCapture.IsCapturing)
 		{
 			S->PasteOverrideCapture.IsCapturing = false;
@@ -1243,9 +1152,9 @@ render_paste_override_modal(GlobalState *AppState)
 		return;
 	}
 
-	if (!ImGui::IsPopupOpen("Per-Program Paste Hotkeys"))
+	if (!ImGui::IsPopupOpen("Config Hotkeys"))
 	{
-		ImGui::OpenPopup("Per-Program Paste Hotkeys");
+		ImGui::OpenPopup("Config Hotkeys");
 	}
 
 	ImVec2 Display = ImGui::GetIO().DisplaySize;
@@ -1254,10 +1163,101 @@ render_paste_override_modal(GlobalState *AppState)
 	ImGui::SetNextWindowBgAlpha(1.0f);
 
 	bool Open = true;
-	if (ImGui::BeginPopupModal("Per-Program Paste Hotkeys", &Open,
+	if (ImGui::BeginPopupModal("Config Hotkeys", &Open,
 		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 	{
-		modal_close_on_click_outside(&S->PasteOverrideModalOpen);
+		modal_close_on_click_outside(&S->HotkeysModalOpen);
+
+		ImGui::Text("Keyboard Shortcuts");
+		ImGui::SameLine();
+		HelpMarkStyle ShortcutsMarkStyle = help_mark_default_style();
+		ShortcutsMarkStyle.DiameterScale = 0.75f;
+		hover_help_mark(
+			"Select an action below, then click the box and press your desired combination. "
+			"Modifier-only combos (e.g. Ctrl+Alt) are supported. Escape clears the selected shortcut.",
+			ShortcutsMarkStyle);
+
+		float AvailWidth = ImGui::GetContentRegionAvail().x;
+		float Spacing = ImGui::GetStyle().ItemSpacing.x;
+		float BtnWidth = (AvailWidth - Spacing * 4) / 5;
+		ImVec2 ActionSize = ImVec2(BtnWidth, 40);
+
+		const char *ActionLabels[] = { "Record", "Cancel Record", "Stream", "Load Model", "Paste Text" };
+		for (int i = 0; i < 5; i++)
+		{
+			if (i > 0) ImGui::SameLine();
+			ImVec4 Color = (S->SelectedAction == i) ? BUTTON_COLOR_BLUE : BUTTON_COLOR_GREY;
+			if (colored_button(ActionLabels[i], ActionSize, Color)) settings_select_action(AppState, i);
+		}
+
+		HotkeyConfig *CurrentHotkey = settings_action_hotkey_ptr(AppState, S->SelectedAction);
+		if (CurrentHotkey)
+		{
+			ImGui::Text("Current: %s", hotkey_to_label(*CurrentHotkey).c_str());
+		}
+
+		if (S->Capture.IsCapturing)
+		{
+			HotkeyConfig Captured = {};
+			HotkeyCaptureResult CaptureResult = poll_hotkey_capture(&S->Capture, &Captured);
+			if (CaptureResult == HOTKEY_CAPTURE_CLEARED)
+			{
+				HotkeyConfig *H = settings_action_hotkey_ptr(AppState, S->SelectedAction);
+				if (H) *H = {};
+				settings_save_action_hotkey(AppState, S->SelectedAction);
+			}
+			else if (CaptureResult == HOTKEY_CAPTURE_COMMITTED)
+			{
+				HotkeyConfig *H = settings_action_hotkey_ptr(AppState, S->SelectedAction);
+				if (H) *H = Captured;
+				settings_save_action_hotkey(AppState, S->SelectedAction);
+			}
+		}
+
+		// Capture display button
+		{
+			std::string CaptureText;
+			ImVec4 BgColor;
+
+			if (S->Capture.IsCapturing)
+			{
+				BgColor = ImVec4(0.08f, 0.40f, 0.75f, 1.0f);
+				if (S->Capture.HasCapture) CaptureText = hotkey_to_label(S->Capture.Captured) + "...";
+				else CaptureText = "Press a key combination...";
+			}
+			else
+			{
+				BgColor = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);
+				if (S->Capture.HasCapture) CaptureText = hotkey_to_label(S->Capture.Captured);
+				else CaptureText = "Click here, then press your hotkey...";
+			}
+
+			ImGui::PushStyleColor(ImGuiCol_Button, BgColor);
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+				ImVec4(BgColor.x * 1.3f > 1.0f ? 1.0f : BgColor.x * 1.3f,
+				       BgColor.y * 1.3f > 1.0f ? 1.0f : BgColor.y * 1.3f,
+				       BgColor.z * 1.3f > 1.0f ? 1.0f : BgColor.z * 1.3f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, BgColor);
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+			std::string ButtonLabel = CaptureText + "##CaptureHotkey";
+			if (ImGui::Button(ButtonLabel.c_str(), ImVec2(-1, 40)))
+			{
+				S->Capture.IsCapturing = !S->Capture.IsCapturing;
+				if (S->Capture.IsCapturing)
+				{
+					S->Capture.PeakModifiers = 0;
+					S->Capture.PeakVirtualKey = 0;
+					S->Capture.ReleaseFrames = 0;
+				}
+			}
+
+			ImGui::PopStyleColor(4);
+		}
+
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
 
 		ImGui::TextUnformatted("Configured Hotkeys");
 		ImGui::SameLine();
@@ -1269,6 +1269,8 @@ render_paste_override_modal(GlobalState *AppState)
 			"Handy when one app needs a different paste shortcut. "
 			"Click a shortcut to change it, X to remove it.",
             HotkeyMarkStyle);
+		ImGui::SameLine();
+		ImGui::TextDisabled("(default: %s)", hotkey_to_label(AppState->PasteHotkey).c_str());
 		ImGui::Spacing();
 		ImGui::Separator();
 
@@ -1373,7 +1375,7 @@ render_paste_override_modal(GlobalState *AppState)
 		ImGui::EndPopup();
 	}
 
-	if (!Open) S->PasteOverrideModalOpen = false;
+	if (!Open) S->HotkeysModalOpen = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -1566,13 +1568,19 @@ render_left_panel(GlobalState *AppState)
 			ImGui::SameLine();
 			ImGui::TextDisabled("(loading GPU devices...)");
 		}
-	}
 
-	// Live operation timings
-	ImGui::Separator();
-	ImGui::Text("Model load: %s", format_timing_ms(AppState->LastModelLoadMs.load()).c_str());
-	ImGui::Text("Transcription: %s", format_timing_ms(AppState->LastTranscriptionMs.load()).c_str());
-	ImGui::Text("Paste: %s", format_timing_ms(AppState->LastPasteMs.load()).c_str());
+		if (AppState->CurrentInferenceDeviceIndex == 0)
+		{
+			ImGui::Text("CPU Cores for Inference");
+			ImGui::SetNextItemWidth(FullWidth.x);
+			int MaxCores = query_logical_processor_count();
+			if (ImGui::InputInt("##ThreadCount", &AppState->WhisperThreadCount, 1, 1))
+			{
+				if (AppState->WhisperThreadCount < 1) AppState->WhisperThreadCount = 1;
+				if (AppState->WhisperThreadCount > MaxCores) AppState->WhisperThreadCount = MaxCores;
+			}
+		}
+	}
 }
 
 static std::string
@@ -1674,6 +1682,14 @@ render_transcribed_text_box(GlobalState *AppState)
 	if (Ui->TranscribedTextBoxBuffer.empty()) Ui->TranscribedTextBoxBuffer.push_back('\0');
 
 	ImGui::TextDisabled("Transcribed Text");
+	ImGui::SameLine();
+	HelpMarkStyle TimingsMarkStyle = help_mark_default_style();
+	TimingsMarkStyle.DiameterScale = 0.75f;
+	std::string TimingsTooltip =
+		"Model load: " + format_timing_ms(AppState->LastModelLoadMs.load()) + "\n" +
+		"Transcription: " + format_timing_ms(AppState->LastTranscriptionMs.load()) + "\n" +
+		"Paste: " + format_timing_ms(AppState->LastPasteMs.load());
+	hover_help_mark(TimingsTooltip.c_str(), TimingsMarkStyle);
 
 	const float BoxHeight = ImGui::GetTextLineHeightWithSpacing() * 6.0f +
 		ImGui::GetStyle().FramePadding.y * 2.0f;
@@ -1699,14 +1715,17 @@ render_transcribed_text_box(GlobalState *AppState)
 		float WrapRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
 		float LineEndX = ImGui::GetCursorPosX();
 		bool LineStarted = false;
-		for (const TranscribedWord &Word : Ui->TranscribedTextBoxWords)
+		for (size_t Wi = 0; Wi < Ui->TranscribedTextBoxWords.size(); Wi++)
 		{
-			float WordW = ImGui::CalcTextSize(Word.Text.c_str()).x;
+			const TranscribedWord &Word = Ui->TranscribedTextBoxWords[Wi];
+			const char *Text = Word.Text.c_str();
+			if (Wi == 0) while (Text[0] == ' ') Text++;
+			float WordW = ImGui::CalcTextSize(Text).x;
 			if (LineStarted && LineEndX + WordW <= WrapRight) ImGui::SameLine(0.0f, 0.0f);
 			else LineEndX = ImGui::GetCursorPosX();
 
 			ImGui::PushStyleColor(ImGuiCol_Text, transcribed_word_confidence_color(Word.Confidence));
-			ImGui::TextUnformatted(Word.Text.c_str());
+			ImGui::TextUnformatted(Text);
 			ImGui::PopStyleColor();
 
 			ImVec2 RectMin = ImGui::GetItemRectMin();
@@ -2049,7 +2068,7 @@ render_main_ui(GlobalState *AppState, ImGuiIO &Io)
 	render_download_modal(AppState);
 	render_update_modal(AppState);
 	render_crash_dialog_ui(AppState);
-	render_paste_override_modal(AppState);
+	render_hotkeys_modal(AppState);
 
 	ImGui::End();
 
